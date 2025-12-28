@@ -49,7 +49,7 @@ A repository for generating, deforming, and performing fluid flow simulations of
    ```
    
 ### Getting Started on Fugaku
-See the documentation [here](docs/Fugaku) .
+See the documentation [here](docs/fugaku) .
 
 ## Project Structure
 ``` bash
@@ -85,3 +85,4 @@ See the documentation [here](docs/Fugaku) .
                 └─ README.md
 
 ```
+
