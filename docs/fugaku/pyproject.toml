@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meshing-deform"
+version = "0.1.0"
+description = "Meshing and deformation tools for CFD batch pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.3.4",
+  "pandas>=2.3.3",
+  "scipy>=1.16.3",
+  "trimesh>=4.9.0",
+  "vtk>=9.5.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,94 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2506                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    arch        "LSB;label=32;scalar=64";
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    WALL
+    {
+        type            noSlip;
+    }
+    OUTLET
+    {
+        type            zeroGradient;
+    }
+    INLET
+    {
+        type            codedFixedValue;
+        value           uniform (0 0 0);
+        name            parabolicInlet;
+        code            #{
+            fvPatchField<vector> velocity
+            (
+                patch().lookupPatchField<volVectorField, vector>("U")
+            );
+
+            const scalar umean = 0.55;
+            const scalar diameter = 0.0024;
+            const scalar radius = diameter / 2.0;
+            vector localPositionCenter = vector::zero;
+            label localNumberOfCells = 0;
+            forAll(velocity, i)
+            {
+                localPositionCenter += patch().Cf()[i];
+                localNumberOfCells++;
+            }
+            // if (velocity.size() == 0) {
+            //     Info<< "veloctiy.size() = " << velocity.size() << endl;
+            //     localPositionCenter = vector::zero;
+            // } else {
+            //     Info<< "veloctiy.size() = " << velocity.size() << endl;
+            //     localPositionCenter /= velocity.size();
+            // }
+            // 集約して全体的な中心位置を計算
+            label globalNumberOfCells = localNumberOfCells;
+            vector globalPositionCenter = localPositionCenter;
+            reduce(globalNumberOfCells, Foam::sumOp<label>());
+            reduce(globalPositionCenter, Foam::sumOp<vector>());
+            globalPositionCenter /= globalNumberOfCells;
+
+            Info<< "globalNumberOfCells = " << globalNumberOfCells << endl;
+            Info<< "globalPositionCenter = " << globalPositionCenter << endl;
+
+
+            forAll(velocity, i)
+            {
+                // surface normal
+                const vector normalVector = patch().nf().ref()[i];// nf 外積
+                const vector unitNormalVector = normalVector / mag(normalVector);
+                // Info<< "unitNormalVector = " << unitNormalVector << endl;
+                // position
+                const vector position = patch().Cf()[i];
+
+                const scalar r = mag(position - globalPositionCenter);
+
+                const scalar uRaw = 2 * umean * (1.0 - r * r / (radius * radius));
+		const scalar u = max(uRaw, 0.0);
+
+                velocity[i] = -u * unitNormalVector;
+            }
+            operator==(velocity);
+        #};
+    }
+}
+
+
+// ************************************************************************* //
