@@ -77,7 +77,7 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
 + 富岳上でのシステムPythonはPython3.6.8と古く、ユーザーがPythonスクリプトを実行するものとしては不適。また、CMakeも標準インストールされているがcmake3.26.5とやや古いので、CMakeを使う場合もパブリックインスタンスからロードするとよい。<br>
 + Spack上で Python3.12は見つからなかった。
   
-### パブリックインスタンスの利用(OpenFOAM-v2412, Python3.13,CMake3.31.8)
+### パブリックインスタンスの利用 (OpenFOAM-v2412, Python3.13, CMake3.31.8 のため)
 1. まず計算ノードに入る。
    ``` bash
    cd /vol0002/mdt1/data/hp120306
@@ -157,14 +157,23 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
       コマンドを実行しておき、`a64fx` かつ `%fj` のパッケージのハッシュ番号を確認しておく。<br>
       25/12/20時点では `ek66qoi` か `hn27egk` になる。
       
-### プライベートインスタンスの利用 (Python3.11)
-1. プライベートspackを使うための公式ドキュメントの手順に従う。
+### プライベート・インスタンスの利用 (Python3.11のため)
+[富岳Spack利用ガイド](https://www.fugaku.r-ccs.riken.jp/doc_root/ja/user_guides/FugakuSpackGuide/)に記載されている、プライベート・インスタンス利用のための手順に従う。
+1. リポジトリのクローン
    ``` bash
    # ホームディレクトリへ移動
    cd $TMPDIR
    pwd # /home/u14406
+   git clone https://github.com/RIKEN-RCCS/spack.git
+   cd spack
+   git checkout fugaku-v1.0.1
    ```
-   したあと、`~/.spack/upstreams.taml`を記載の通りの内容で作る
+2. パブリック・インスタンス提供パッケージの利用
+   ログインノードで環境の読み込み
+   ``` bash
+   . $TMPDIR/spack/share/spack/setup-env.sh
+   ```
+   したあと、`~/.spack/upstreams.yaml`を記載の通りの内容で作る
    ``` bash
    mkdir -p ~/.spack
    ls -la   #.spack があればok
@@ -183,9 +192,34 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
    # コンパイラ設定ができているか確認
    spack compilers # 5分くらい時間かかる
    ```
-   さらに、4行のコマンドでローカル・リポジトリを追加
+   以下のような出力があればOK
+   ``` bash
+   ==> Available compilers
+   -- fj rhel8-x86_64 ----------------------------------------------
+   [e]  fj@4.12.1  [e]  fj@4.12.0  [e]  fj@4.11.2  [e]  fj@4.11.1  [e]  fj@4.10.0
    
-2. この設定を行って以降は、bashの接続を切って、後日計算ノードに入ったときでも、
+   -- gcc rhel8-aarch64 --------------------------------------------
+   [^]  gcc@15.1.0  [^]  gcc@14.3.0  [^]  gcc@13.4.0
+   
+   -- gcc rhel8-x86_64 ---------------------------------------------
+   [e]  gcc@8.5.0  [^]  gcc@15.1.0  [^]  gcc@14.3.0
+   
+   -- llvm rhel8-aarch64 -------------------------------------------
+   [^]  llvm@20.1.6  [^]  llvm@19.1.7  [^]  llvm@18.1.8  [^]  llvm@17.0.6  [^]  llvm@16.0.6  [^]  llvm@14.0.6
+   ```
+   さらに、以下のコマンドでローカル・リポジトリを以下
+   ``` bash
+   spack repo add /vol0004/apps/oss/spack/var/spack/fugaku-packages/repos/spack_repo/fugaku/local
+   spack repo add /vol0004/apps/oss/spack/var/spack/fugaku-packages/repos/spack_repo/fugaku/update
+   spack repo add /vol0004/apps/oss/spack/var/spack/fugaku-packages/repos/spack_repo/fugaku/rist
+   spack repo add /vol0004/apps/oss/spack/var/spack/fugaku-packages/repos/spack_repo/fugaku/rccs
+   ```
+   設定が完了したので、以下のコマンドでパブリック・インスタンス提供のパッケージが見えることを確認する
+   ``` bash
+   spack find
+   ```
+   
+4. この設定を行って以降は、bashの接続を切って、後日計算ノードに入ったときでも、
    ``` bash
    . /vol0004/apps/oss/spack/share/spack/setup-env.sh
    spack load python@3.11.11
@@ -195,6 +229,8 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
    ``` bash
    spack load /7heyycu
    ```
+   で `Python3.11.11` が使えるようになる。
+
    
 <a id="github-clone"></a>
 ## ログインノードでGitHubリモートリポジトリをcloneする
@@ -331,7 +367,7 @@ phsub run_batch.sh
    spack install -j 8 gmsh@4.13.1 ~fltk ~mpi target=a64fx %fj     # 30分以上かかる
    ```
    `-j 8` は並列数8でビルドする、という意味。`~fltk`は、`fltk`を外してビルドする、という意味。これで`gmsh.fltk.run()`などの可視化コマンドは使えなくなる。が、そもそも富岳計算ノードで可視化はできないので問題ない。<br>
-   mpi込みでiインストールすると、インストールはできるが`spack load` がうまく行かなかったのでこれも `~mpi` で外す。<br>
+   mpi込みでインストールすると、インストールはできるが`spack load` がうまく行かなかったのでこれも `~mpi` で外す。<br>
    上記コマンドは、インタラクティブで計算ノードに入って実行しても、接続時間内に終了しない可能性が高いので、ログインノードからジョブとして投げる。<br>
    以下のような `install_gmsh.sh`シェルスクリプトを作成する。
    ``` bash
@@ -362,5 +398,6 @@ phsub run_batch.sh
 
 → **どうやってもうまく行かなかった** <br>
 Spack経由でのGmshのセットアップは難しそうでした。
+
 
 
