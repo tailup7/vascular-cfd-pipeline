@@ -5,7 +5,7 @@
 + CLIからSSH接続
 
 どちらもアクセス結果は同じ。<br>
-(公式ドキュメントである「スタートアップガイド」を参照してください)
+手順は[スーパーコンピュータ「富岳」スタートアップガイド](https://www.hpci-office.jp/fugaku/user-info/user-guide.pdf)を参照してください。
 
 ## 自分の作業環境へ移動する
 ログインノードには入れたら、所属するグループ(`hp120306`)のデータ領域(/data)へ移動する。<br>
@@ -37,8 +37,8 @@ cd 14406
 ```
 
 ## ローカルとログインノード間のファイルの受け渡し
-**WinSCP**を使う<br>
-セットアップ手順は公式ドキュメント参照
+**WinSCP**を使う。<br>
+手順は[スーパーコンピュータ「富岳」スタートアップガイド](https://www.hpci-office.jp/fugaku/user-info/user-guide.pdf)参照
 
 ## 計算ノードへ移動する
 ここでは、ログインノード上の自身のデータ領域から、計算ノードへ入る方法を説明する。<br>
@@ -72,9 +72,11 @@ uname -m  # aarch64と表示されれば計算ノードに入れている
 
 ## Spackの利用 
 OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
-※ Spackについては()参照 <br>
-※ 富岳上でのシステムPythonはPython3.6.8と古く、ユーザーがPythonスクリプトを実行するものとしては不適。また、CMakeも標準インストールされているがcmake3.26.5とやや古いので、CMakeを使う場合もパブリックインスタンスからロードするとよい。<br>
-※ Spack上で Python3.12は見つからなかった。
++ Spackについては[富岳Spack利用ガイド](https://www.fugaku.r-ccs.riken.jp/doc_root/ja/user_guides/FugakuSpackGuide/)などを参考にしてみて下さい。 <br>
+   ( ↑ 富岳アカウントが発行され、富岳ウェブサイトへのアクセスのためのセットアップが済んでいないと閲覧できません) <br>
++ 富岳上でのシステムPythonはPython3.6.8と古く、ユーザーがPythonスクリプトを実行するものとしては不適。また、CMakeも標準インストールされているがcmake3.26.5とやや古いので、CMakeを使う場合もパブリックインスタンスからロードするとよい。<br>
++ Spack上で Python3.12は見つからなかった。
+  
 ### パブリックインスタンスの利用(OpenFOAM-v2412, Python3.13,CMake3.31.8)
 1. まず計算ノードに入る。
    ``` bash
@@ -109,7 +111,9 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
       . /vol0004/apps/oss/spack/share/spack/setup-env.sh
       spack load openfoam@2412 arch=linux-rhel8-a64fx
       ```
-   2. **Python3.13.5**
+   2. **Python3.13.5** <br>
+   
+      **Python3.13**を使いたい場合は、以下のコマンドを実行する。
       ``` bash
       spack load python@3.13.5
       ```
@@ -192,9 +196,9 @@ OpenFOAM, Python, CMakeなどのOSSをSpackから利用する。<br>
    spack load /7heyycu
    ```
    
-
-### ログインノードでgithubリモートリポジトリをcloneする
-富岳ではGitは既にインストールされている。計算ノードにはネットワーク制限があり、外部GitHubへのアクセスはできない。**ログインノードで git clone**する<br>
+<a id="github-clone"></a>
+## ログインノードでGitHubリモートリポジトリをcloneする
+富岳ではGitは既にインストールされている。計算ノードにはネットワーク制限があり、外部GitHubへのアクセスはできない。**ログインノードで git clone**すること。<br>
 
 すでにSSH公開鍵をログインノード上で作っているか確認
 ``` bash
@@ -223,13 +227,91 @@ ls -la ~/.ssh
    成功のメッセージが出ればok
 4. `git clone` する
    ``` bash
-   git clone git@github.com:ut-olab/meshing-deformation-cfd-batch.git
+   git clone <repository-url>
    ```
-   ※ 上記手順は、自分が`git clone`したいリポジトリの管理者でもなくてもよい。つまりこの手順で誰でも、富岳のログインノード上で `git clone`コマンドが使えるようになる。ただし、`git clone`できるのは、自分のgithubアカウント(富岳ログインノードで生成した公開鍵を登録したgithubアカウント) において、 閲覧権限のあるリモートリポジトリのみ。対象のgithubアカウントから見て、閲覧できないリポジトリ(全然関係のないorganizationのリポジトリや、privateリポジトリ) は`git clone` することができない。
 
 
 
-### pip install gmshできるようにする
+
+
+## Spackを使わず、自分の領域にGmshをソースビルドする
+1. `vascular-cfd-batch/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
+2. gmshをソースビルドするジョブスクリプトを実行
+   ``` absh
+   cd /vol0002/mdt1/data/hp120306/u14406
+   pjsub build_gmsh.sh # 30min ~ 1h くらいかかる
+   ```
+   出力される`build_gmsh.sh.<jobid>.out`ファイルの最後の方をみて、`[INFO] find gmsh.py / libgmsh.so`と出力されていればOK <br>
+   **補足** : もし`Permission denied`されるなどErrorが出たら、
+   ``` bash
+   apck config get config
+   ```
+   で原因を探す。自分の場合は以前に別の`vol`でspackの設定を行ってしまったため、`install_tree`の設定にError要因があったので、以下のコマンドで修正した。
+   ``` bash
+   spack config --scope user edit config
+   ```
+   以下のように書き換えた。
+   ``` bash
+   # 修正前
+   config:
+     install_tree: /vol0003/hp120306/data/u14406/spack/opt/spack
+   # 修正後
+   config:
+     install_tree: /volmd0002/mdt1/data/hp120306/u14406/spack/opt/spack
+   ```
+4. Pythonスクリプトで`import gmsh`が通るか確認
+   ``` bash
+   pjsub run_python_gmsh.sh
+   ```
+
+# meshing_deformプロジェクトのセットアップ
+**初回**
+1. [ログインノードでGitHubリモートリポジトリをcloneする](#github-clone) 
+2. **spackを使わず、自分の領域にgmshをソースビルドする** の手順
+3. `pyproject.toml`を`docs/fugaku`のものに置き換える
+4. **計算ノードに入って**、必要な`venv`仮想環境を作る。
+   ``` bash
+   cd /vol0002/mdt1/data/hp120306/u14406/vascular-cfd-batch
+   pjsub --interact -g hp120306 -x PJM_LLIO_GFSCACHE=/vol0002:/vol0004 -L "node=1,elapse=00:30:00"
+   . /vol0004/apps/oss/spack/share/spack/setup-env.sh
+   spack find python@3.11.11  # 複数ヒットしてエラーになる。ハッシュ番号が一覧表示されるはず。
+   spack load /7heyycu        # 計算ノードノード向けのもの(a64fx)でfjのものを選ぶ
+   python --version           # Python3.11.11
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -e meshing_deform
+   ```
+5. ログインノードに戻り、`jobs/fugaku/run_batch.sh`を投げる
+   ``` bash
+   exit
+   cd jobs/fugaku/run_batch.sh
+   pjsub run_batch.sh
+   ```
+
+**2回目以降**
+``` bash
+cd jobs/fugaku/run_batch.sh
+phsub run_batch.sh
+```
+
+
+## コマンド
+
+|      コマンド     |    意味    |
+| ---------------- | ---------- |
+| pjstat --summary | 現在自分が投入しているジョブ一覧の確認        |
+| pjstat           | 投入したジョブ一覧や、最短の開始予定時刻の表示 |
+| pjsub foo.sh     | ジョブ投入コマンド                           |
+
+ただし`pjstat`コマンドは何度か実行していると、最短の開始予定時刻 がより直近になっていたりする。<br>
+またpjコマンドはログインノードでないと`commnd not found`となる
+
+<br>
+<br>
+<br>
+<br>
+
+### 余談 : Spackを利用し、`pip install gmsh`でPythonスクリプトからGmshを使えるようにする(失敗)
 1. 計算ノードに入り **プライベートspack** を使えるようにする。
    ``` bash
    . /home/u14406/spack/share/spack/setup-env.sh
@@ -281,86 +363,6 @@ ls -la ~/.ssh
    spack load /
    ```
 
-→ **どうやってもうまく行かなかった**
-
-## spackを使わず、自分の領域にgmshをソースビルドする
-1. `meshing-deformation-cfd-batch/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
-2. gmshをソースビルドするジョブスクリプトを実行
-   ``` absh
-   cd /vol0002/mdt1/data/hp120306/u14406
-   pjsub build_gmsh.sh # 30min ~ 1h くらいかかる
-   ```
-   出力される`build_gmsh.sh.<jobid>.out`ファイルの最後の方をみて、`[INFO] find gmsh.py / libgmsh.so`と出力されていればOK <br>
-   **補足** : もし`Permission denied`されるなどErrorが出たら、
-   ``` bash
-   apck config get config
-   ```
-   で原因を探す。自分の場合は以前に別の`vol`でspackの設定を行ってしまったため、`install_tree`の設定にError要因があったので、以下のコマンドで修正した。
-   ``` bash
-   spack config --scope user edit config
-   ```
-   以下のように書き換えた。
-   ``` bash
-   # 修正前
-   config:
-     install_tree: /vol0003/hp120306/data/u14406/spack/opt/spack
-   # 修正後
-   config:
-     install_tree: /volmd0002/mdt1/data/hp120306/u14406/spack/opt/spack
-   ```
-4. Pythonスクリプトで`import gmsh`が通るか確認
-   ``` bash
-   pjsub run_python_gmsh.sh
-   ```
-
-# meshing_deformプロジェクトのセットアップ
-**初回**
-1. **ログインノードでgithubリモートリポジトリをcloneする** の手順
-2. **spackを使わず、自分の領域にgmshをソースビルドする** の手順
-3. `pyproject.toml`を`docs/fugaku`のものに置き換える
-4. **計算ノードに入って**、必要な`venv`仮想環境を作る。
-   ``` bash
-   cd /vol0002/mdt1/data/hp120306/u14406/meshing_deformation_cfd_batch
-   pjsub --interact -g hp120306 -x PJM_LLIO_GFSCACHE=/vol0002:/vol0004 -L "node=1,elapse=00:30:00"
-   . /vol0004/apps/oss/spack/share/spack/setup-env.sh
-   spack find python@3.11.11  # 複数ヒットしてエラーになる。ハッシュ番号が一覧表示されるはず。
-   spack load /7heyycu        # 計算ノードノード向けのもの(a64fx)でfjのものを選ぶ
-   python --version           # Python3.11.11
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -e meshing_deform
-   ```
-5. ログインノードに戻り、`jobs/fugaku/run_batch.sh`を投げる
-   ``` bash
-   exit
-   cd jobs/fugaku/run_batch.sh
-   pjsub run_batch.sh
-   ```
-
-**2回目以降**
-``` bash
-cd jobs/fugaku/run_batch.sh
-phsub run_batch.sh
-```
- 
-## 環境
-
-OS : Red Hat Enterprise Linux (RHEL) 8.10
-<br>
-利用可能なプロジェクトやグループ
-```
-groups=59999(fugaku),15999(trial),20014(hp120306)
-```
-
-
-## コマンド
-
-|      コマンド     |    意味    |
-| ---------------- | ---------- |
-| pjstat --summary | 現在自分が投入しているジョブ一覧の確認        |
-| pjstat           | 投入したジョブ一覧や、最短の開始予定時刻の表示 |
-| pjsub foo.sh     | ジョブ投入コマンド                           |
-
-ただし`pjstat`コマンドは何度か実行していると、最短の開始予定時刻 がより直近になっていたりする。<br>
-またpjコマンドはログインノードでないと`commnd not found`となる
+→ **どうやってもうまく行かなかった** <br>
+Spack経由でのGmshのセットアップは難しそうでした。
 
