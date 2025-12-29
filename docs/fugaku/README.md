@@ -310,7 +310,7 @@ ls -la ~/.ssh
 3. `vascular-cfd-pipeline/meshing-deform/pyproject.toml`を`vascular-cfd-pipeline/docs/fugaku/pyproject.toml` に置き換える
 4. **計算ノードに入って**、`venv`仮想環境を作り、必要なライブラリをインストールする
    ``` bash
-   cd /vol0002/mdt1/data/hp120306/u14406/vascular-cfd-batch
+   cd /vol0002/mdt1/data/hp120306/u14406/vascular-cfd-pipeline
    pjsub --interact -g hp120306 -x PJM_LLIO_GFSCACHE=/vol0002:/vol0004 -L "node=1,elapse=00:30:00"
    . /vol0004/apps/oss/spack/share/spack/setup-env.sh
    spack find python@3.11.11  # 複数ヒットしてエラーになる。ハッシュ番号が一覧表示されるはず。
@@ -401,6 +401,7 @@ phsub run_batch.sh
 
 → **どうやってもうまく行かなかった** <br>
 Spack経由でのGmshのセットアップは難しそうでした。
+
 
 
 
