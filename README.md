@@ -1,4 +1,4 @@
-#  meshing-deformation-cfd-batch
+#  vascular-cfd-pipeline
 A repository for generating, deforming, and performing fluid flow simulations of patient-specific vascular models based on centerline information, with support for batch processing.
 
 ## Features
@@ -25,7 +25,7 @@ A repository for generating, deforming, and performing fluid flow simulations of
 1. Clone the repository
    ``` bash
    git clone <repository-url>
-   cd meshing-deformation-cfd-batch
+   cd vascular-cfd-pipeline
    ```
 2. Install dependencies for `meshing_deform`
    ``` bash
@@ -53,7 +53,7 @@ See the documentation [here](docs/fugaku) .
 
 ## Project Structure
 ``` bash
-  meshing-deformation-cfd-batch/
+  vascular-cfd-pipeline/
   ├─ meshing_deform/
   │     ├─ src/ 
   │     │    ├─ meshing/
@@ -85,4 +85,5 @@ See the documentation [here](docs/fugaku) .
                 └─ README.md
 
 ```
+
 
