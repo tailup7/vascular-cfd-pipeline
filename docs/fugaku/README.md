@@ -233,9 +233,9 @@ ls -la ~/.ssh
 
 
 
-
+<a id="gmsh-build"></a>
 ## Spackを使わず、自分の領域にGmshをソースビルドする
-1. `vascular-cfd-batch/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
+1. `vascular-cfd-pipeline/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
 2. gmshをソースビルドするジョブスクリプトを実行
    ``` absh
    cd /vol0002/mdt1/data/hp120306/u14406
@@ -267,9 +267,9 @@ ls -la ~/.ssh
 # meshing_deformプロジェクトのセットアップ
 **初回**
 1. [ログインノードでGitHubリモートリポジトリをcloneする](#github-clone) 
-2. **spackを使わず、自分の領域にgmshをソースビルドする** の手順
-3. `pyproject.toml`を`docs/fugaku`のものに置き換える
-4. **計算ノードに入って**、必要な`venv`仮想環境を作る。
+2. [Spackを使わず、自分の領域にGmshをソースビルドする](#gmsh-build)
+3. `vascular-cfd-pipeline/meshing-deform/pyproject.toml`を`vascular-cfd-pipeline/docs/fugaku/pyproject.toml` に置き換える
+4. **計算ノードに入って**、`venv`仮想環境を作り、必要なライブラリをインストールする
    ``` bash
    cd /vol0002/mdt1/data/hp120306/u14406/vascular-cfd-batch
    pjsub --interact -g hp120306 -x PJM_LLIO_GFSCACHE=/vol0002:/vol0004 -L "node=1,elapse=00:30:00"
@@ -295,16 +295,13 @@ phsub run_batch.sh
 ```
 
 
-## コマンド
+### コマンド一覧
 
 |      コマンド     |    意味    |
 | ---------------- | ---------- |
 | pjstat --summary | 現在自分が投入しているジョブ一覧の確認        |
 | pjstat           | 投入したジョブ一覧や、最短の開始予定時刻の表示 |
 | pjsub foo.sh     | ジョブ投入コマンド                           |
-
-ただし`pjstat`コマンドは何度か実行していると、最短の開始予定時刻 がより直近になっていたりする。<br>
-またpjコマンドはログインノードでないと`commnd not found`となる
 
 <br>
 <br>
@@ -365,4 +362,5 @@ phsub run_batch.sh
 
 → **どうやってもうまく行かなかった** <br>
 Spack経由でのGmshのセットアップは難しそうでした。
+
 
