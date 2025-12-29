@@ -19,6 +19,7 @@ A repository for generating, deforming, and performing fluid flow simulations of
 
 ## Requirements
 + Python3.11 or Python3.12
++ OpenFOAM
 
 ## Getting Started
 ### Getting Started on Local Machine (Windows or Linux)
@@ -85,5 +86,6 @@ See the documentation [here](docs/fugaku) .
                 └─ README.md
 
 ```
+
 
 
