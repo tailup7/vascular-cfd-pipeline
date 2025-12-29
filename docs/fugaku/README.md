@@ -223,7 +223,7 @@ ls -la ~/.ssh
    成功のメッセージが出ればok
 4. `git clone` する
    ``` bash
-   git clone git@github.com:ut-olab/vascular-cfd-pipeline.git
+   git clone git@github.com:ut-olab/meshing-deformation-cfd-batch.git
    ```
    ※ 上記手順は、自分が`git clone`したいリポジトリの管理者でもなくてもよい。つまりこの手順で誰でも、富岳のログインノード上で `git clone`コマンドが使えるようになる。ただし、`git clone`できるのは、自分のgithubアカウント(富岳ログインノードで生成した公開鍵を登録したgithubアカウント) において、 閲覧権限のあるリモートリポジトリのみ。対象のgithubアカウントから見て、閲覧できないリポジトリ(全然関係のないorganizationのリポジトリや、privateリポジトリ) は`git clone` することができない。
 
@@ -284,7 +284,7 @@ ls -la ~/.ssh
 → **どうやってもうまく行かなかった**
 
 ## spackを使わず、自分の領域にgmshをソースビルドする
-1. `vascular-cfd-pipeline/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
+1. `meshing-deformation-cfd-batch/docs/fugaku/`内の`build_gmsh.sh`および`run_python_gmsh.sh`を、自分の作業ディレクトリ`/vol0002/mdt1/data/hp120306/u14406/`にコピーする
 2. gmshをソースビルドするジョブスクリプトを実行
    ``` absh
    cd /vol0002/mdt1/data/hp120306/u14406
@@ -320,7 +320,7 @@ ls -la ~/.ssh
 3. `pyproject.toml`を`docs/fugaku`のものに置き換える
 4. **計算ノードに入って**、必要な`venv`仮想環境を作る。
    ``` bash
-   cd /vol0002/mdt1/data/hp120306/u14406/vascular-cfd-pipeline
+   cd /vol0002/mdt1/data/hp120306/u14406/meshing_deformation_cfd_batch
    pjsub --interact -g hp120306 -x PJM_LLIO_GFSCACHE=/vol0002:/vol0004 -L "node=1,elapse=00:30:00"
    . /vol0004/apps/oss/spack/share/spack/setup-env.sh
    spack find python@3.11.11  # 複数ヒットしてエラーになる。ハッシュ番号が一覧表示されるはず。

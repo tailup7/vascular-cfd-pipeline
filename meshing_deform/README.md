@@ -22,7 +22,7 @@ Windowsで使う場合は、`meshing_deform/src/meshing/main.py`及び、`meshin
    # PowerShell の場合
    .\venv\Scripts\Activate
    ```
-1. `vascular-cfd-pipeline`以下のどの階層にいてもいいので、以下を実行 <br>
+1. `meshing-deformation-cfd-batch`以下のどの階層にいてもいいので、以下を実行 <br>
    **メッシュ生成**
    ``` bash
    python -m meshing.main

@@ -5,3 +5,5 @@ runs/
 inputs/
 data/
 dataset/
+inputs_archive/
+delete_zone_identifier.py

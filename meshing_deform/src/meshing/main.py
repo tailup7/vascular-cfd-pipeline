@@ -6,7 +6,6 @@ import commonlib.func as func
 import commonlib.myio as myio
 from postcheck.openfoam_checkmesh import run_checkmesh
 from pathlib import Path
-from datetime import datetime
 
 def run(
     centerline_filepath = None,
@@ -17,23 +16,23 @@ def run(
     start = time.time()
     mesh  = meshinfo.Mesh() 
 
-    # prepare output folder 
-    if output_dir is None:
-        HERE         = Path(__file__).resolve()    # このコード(main.py)の絶対パスを取得
-        PROJECT_ROOT = HERE.parent.parent.parent   # meshing_deform フォルダの絶対パス
-        DATA_DIR     = PROJECT_ROOT / "data"
-        DATA_DIR.mkdir(exist_ok = True)  
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = DATA_DIR / f"meshing_{timestamp}"
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok = True)
-
     # get input files
     if centerline_filepath is None:
         centerline_filepath = myio.select_csv("original")
     if stl_filepath is None:
         stl_filepath = myio.select_stl()
     centerline_nodes, radius_list, inlet_outlet_info = myio.read_target_centerline(centerline_filepath)
+
+    # prepare output folder 
+    if output_dir is None:
+        THIS_FILEPATH         = Path(__file__).resolve()    
+        PROJECT_ROOT = THIS_FILEPATH.parent.parent.parent.parent   
+        DATA_DIR     = PROJECT_ROOT / "runs"
+        DATA_DIR.mkdir(exist_ok = True)
+        centerline_filename = Path(centerline_filepath).stem 
+        output_dir = DATA_DIR / f"m-{centerline_filename}"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok = True)
 
     # copy input files to output folder for backup
     myio.copy_files_to_dir(centerline_filepath, stl_filepath, dst_dir = output_dir / "input", overwrite = True)

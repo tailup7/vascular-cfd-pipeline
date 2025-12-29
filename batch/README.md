@@ -12,23 +12,23 @@
 
 0. **入力データの用意**
    + メッシュの生成がしたい場合 : <br>
-     `vascular-cfd-pipeline/inputs/original/`に、表面(.stl)とその中心線(.csv) を入れる <br>
+     `meshing-deformation-cfd-batch/inputs/original/`に、表面(.stl)とその中心線(.csv) を入れる <br>
      **Note**
-     + 一回のバッチ処理でメッシュ生成は一回しか行えないので、表面(.stl)と中心線(.csv)は`vascular-cfd-pipeline/inputs/original/`に1つずつしか入れられない。
+     + 一回のバッチ処理でメッシュ生成は一回しか行えないので、表面(.stl)と中心線(.csv)は`meshing-deformation-cfd-batch/inputs/original/`に1つずつしか入れられない。
      + 表面(.stl)は両端が開放されている必要がある。中心線(.csv)は形状の両端まで届いている必要がある。
      + 中心線(.csv)ファイルのはじめに記述されている点がある方の面が流体解析時の`INLET`になる
    + メッシュの変形がしたい場合 : <br>
-     `vascular-cfd-pipeline/inputs/original/`に、基準となるテトラプリズムメッシュ(.msh)とその中心線(.csv)を入れ、`vascular-cfd-pipeline/inputs/target/`に変形目標となる中心線(*.csv)を入れる。<br>
+     `meshing-deformation-cfd-batch/inputs/original/`に、基準となるテトラプリズムメッシュ(.msh)とその中心線(.csv)を入れ、`meshing-deformation-cfd-batch/inputs/target/`に変形目標となる中心線(*.csv)を入れる。<br>
      **Note**
-     + `vascular-cfd-pipeline/inputs/target/`に複数の中心線を入れている場合、`vascular-cfd-pipeline/inputs/original/`に入っているメッシュ(*.msh)を基準モデルとして、すべての目標中心線に対して変形メッシュを作成する
+     + `meshing-deformation-cfd-batch/inputs/target/`に複数の中心線を入れている場合、`meshing-deformation-cfd-batch/inputs/original/`に入っているメッシュ(*.msh)を基準モデルとして、すべての目標中心線に対して変形メッシュを作成する
      + 中心線(.csv)ファイルのはじめに記述されている点がある方の面が流体解析時の`INLET`になる
      + 基準中心線と目標中心線で点群数が一致している必要がある
    + メッシュの生成 + その変形 がしたい場合 : <br>
-     `vascular-cfd-pipeline/inputs/original/`に、表面(.stl)とその中心線(.csv) を入れ、`vascular-cfd-pipeline/inputs/target/`に目標中心線(.csv) (複数可)を入れる
+     `meshing-deformation-cfd-batch/inputs/original/`に、表面(.stl)とその中心線(.csv) を入れ、`meshing-deformation-cfd-batch/inputs/target/`に目標中心線(.csv) (複数可)を入れる
    
 2. 仮想環境を activateする
    ``` bash
-   cd vascular-cfd-pipeline
+   cd meshing-deformation-cfd-batch
    source venv/bin/activate
    ```
 3. `batch_auto.py`を実行する
@@ -37,5 +37,5 @@
    python batch_auto.py
    ```
 4. 結果の確認 <br>
-   `vascular-cfd-pipeline/runs/`に結果が出力される。
+   `meshing-deformation-cfd-batch/runs/`に結果が出力される。
 
