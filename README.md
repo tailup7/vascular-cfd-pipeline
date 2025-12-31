@@ -18,11 +18,12 @@ A repository for generating, deforming, and performing fluid flow simulations of
 &nbsp;&nbsp;&nbsp; The entire pipeline can be executed in batch for multiple datasets ([batch](batch/)).
 
 ## Requirements
-+ Python3.11 or Python3.12
-+ OpenFOAM
++ Linux
+   + Python3.11 or Python3.12
+   + OpenFOAM
 
 ## Getting Started
-### Getting Started on Local Machine (Windows or Linux)
+### Getting Started on Local Machine (Linux)
 1. Clone the repository
    ``` bash
    git clone <repository-url>
@@ -34,10 +35,7 @@ A repository for generating, deforming, and performing fluid flow simulations of
    python3 -m venv venv
    
    # activate the virtual environment
-   # on Bash
    source venv/bin/activate
-   # on PowerShell
-   .\venv\Scripts\Activate
 
    # install dependencies
    pip install -e meshing_deform
