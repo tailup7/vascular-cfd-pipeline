@@ -55,19 +55,13 @@ def ensure_original_mesh(original_dir: Path) -> Path:
     centerline_filepath = list_files_exactly_one(original_dir, "*.csv")
     stl_filepath = list_files_exactly_one(original_dir, "*.stl")
 
-    # meshing の出力先（runs/m-<centerline_stem>）
-    output_dir = (PROJECT_ROOT / "runs" / f"m-{centerline_filepath.stem}").resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     print("[batch] No msh found. Run meshing once.")
     print(f"  centerline : {centerline_filepath}")
     print(f"  stl        : {stl_filepath}")
-    print(f"  output     : {output_dir}")
 
-    run_meshing(
+    output_dir = run_meshing(
         centerline_filepath=str(centerline_filepath),
         stl_filepath=str(stl_filepath),
-        output_dir=str(output_dir),
         interactive=False,
     )
 
@@ -113,19 +107,15 @@ def run_deform_all(original_dir: Path, target_dir: Path):
 
     for i, target_centerline_filepath in enumerate(target_csvs, start=1):
         target_centerline_filepath = target_centerline_filepath.resolve()
-        output_dir = (PROJECT_ROOT / "runs" / f"d-{target_centerline_filepath.stem}").resolve()
-        output_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"\n[batch][{i}/{len(target_csvs)}] Deform")
         print(f"  target CL : {target_centerline_filepath}")
-        print(f"  output    : {output_dir}")
 
         try:
-            run_deform(
+            output_dir = run_deform(
                 centerline_filepath=str(centerline_filepath),
                 target_centerline_filepath=str(target_centerline_filepath),
                 original_mesh_filepath=str(mesh_filepath),
-                output_dir=str(output_dir),
                 interactive=False,
             )
 

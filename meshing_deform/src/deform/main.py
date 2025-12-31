@@ -84,10 +84,11 @@ def run(
         gmsh.finalize()
     print("-------- Finished Deform Mesh --------")
     print(f"elapsed time : {elapsed_time:.4f} s")
-    #run_checkmesh(str(output_dir / "deformed_mesh.msh"))
+    return output_dir
 
 def main():
-    run()
+    output_dir = run()
+    run_checkmesh(str(output_dir / "deformed_mesh.msh"))
 
 if __name__ == "__main__":
     main()

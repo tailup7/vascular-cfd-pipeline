@@ -68,10 +68,11 @@ def run(
     elapsed_time = end-start
     print("-------- Finished Make Mesh --------")
     print(f"elapsed time : {elapsed_time:.4f} s")
-    #run_checkmesh(str(output_dir / "original_mesh.msh"))
+    return output_dir
 
 def main():
-    run()
+    output_dir = run()
+    run_checkmesh(str(output_dir / "original_mesh.msh"))
 
 if __name__ == "__main__":
     main()
