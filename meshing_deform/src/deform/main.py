@@ -31,8 +31,6 @@ def run(
     centerline_nodes      = myio.read_original_centerline(centerline_filepath) 
     target_centerline_nodes, radius_list_target, inlet_outlet_info = myio.read_target_centerline(target_centerline_filepath)
     surface_nodes,surface_triangles              = myio.read_msh_original_WALL(original_mesh_filepath,deformed_mesh)
-    if config.ALIGNMENT == True:
-        target_centerline_nodes, inlet_outlet_info = alignment(centerline_nodes, target_centerline_nodes, radius_list_target, target_centerline_filepath, output_dir)
 
     # prepare output folder 
     if output_dir is None:
@@ -44,6 +42,10 @@ def run(
         output_dir = DATA_DIR / f"d-{target_centerline_filename}"
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True,exist_ok=True)
+
+    # centerline alignment
+    if config.ALIGNMENT == True:
+        target_centerline_nodes, inlet_outlet_info = alignment(centerline_nodes, target_centerline_nodes, radius_list_target, target_centerline_filepath, output_dir)
 
     # copy input files to output folder for backup
     myio.copy_files_to_dir(centerline_filepath, target_centerline_filepath,original_mesh_filepath, dst_dir = output_dir / "input", overwrite=True)

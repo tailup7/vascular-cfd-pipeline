@@ -9,6 +9,13 @@ import commonlib.myio as myio
 import numpy as np
 import pandas as pd
 
+def _unit(v, eps=1e-12):
+    v = np.asarray(v, dtype=float).reshape(3,)
+    n = np.linalg.norm(v)
+    if n < eps or not np.isfinite(n):
+        return None
+    return v / n
+
 def alignment(original_centerline_nodes,target_centerline_nodes, radius_list_target, target_centerline_filepath, output_dir):
     curvature_differential = []
     curvature_differential_max = float("-inf")
@@ -24,35 +31,70 @@ def alignment(original_centerline_nodes,target_centerline_nodes, radius_list_tar
             curvature_differential_max    = diff
             curvature_differential_max_id = i
 
-    original_centerline_nodes[curvature_differential_max_id].calc_circumcircle(
-        original_centerline_nodes[curvature_differential_max_id-1], 
-        original_centerline_nodes[curvature_differential_max_id+1])
-    target_centerline_nodes[curvature_differential_max_id].calc_circumcircle(
-        target_centerline_nodes[curvature_differential_max_id-1], 
-        target_centerline_nodes[curvature_differential_max_id+1])
-    R = utility.rotation_matrix_from_A_to_B(target_centerline_nodes[curvature_differential_max_id].unit_center_dir,
-                                                original_centerline_nodes[curvature_differential_max_id].unit_center_dir)
-    
-    t = utility.vec(original_centerline_nodes[curvature_differential_max_id]) - (R @ utility.vec(target_centerline_nodes[curvature_differential_max_id]))
+    i0 = curvature_differential_max_id
+    org = original_centerline_nodes[i0]
+    tgt = target_centerline_nodes[i0]
+
+    org.calc_circumcircle(original_centerline_nodes[i0-1], original_centerline_nodes[i0+1])
+    tgt.calc_circumcircle(target_centerline_nodes[i0-1], target_centerline_nodes[i0+1])
+
+    org_ucd = org.unit_center_dir
+    tgt_ucd = tgt.unit_center_dir
+
+    if (org_ucd is not None) and (tgt_ucd is not None):
+        R1 = utility.rotation_matrix_from_A_to_B(_unit(tgt_ucd), _unit(org_ucd))
+        t1 = utility.vec(org) - (R1 @ utility.vec(tgt))
+
+##############  3点がほぼ直線の時、曲率中心への方向ベクトルが定義できない。
+############## 曲率の増分が “最大” になった点IDが, originalにおいて 共線で円が作れない点(直線)だった場合
+    else:
+        # フォールバック：接線だけで合わせる
+        # 接線は unit_center_dir が無くても計算できる
+        org.calc_tangentvec(original_centerline_nodes)
+        tgt.calc_tangentvec(target_centerline_nodes)
+
+        org_tan = _unit(org.tangentvec)
+        tgt_tan = _unit(tgt.tangentvec)
+
+        if org_tan is None or tgt_tan is None:
+            raise ValueError(f"tangentvec is invalid at id={i0} (cannot fallback to tangent-only)")
+
+        R1 = utility.rotation_matrix_from_A_to_B(tgt_tan, org_tan)
+        t1 = utility.vec(org) - (R1 @ utility.vec(tgt))
+
+
     target_centerline_nodes_transformed = []
     for i in range(len(original_centerline_nodes)):
-        p_rot1 = R @ utility.vec(target_centerline_nodes[i]) + t
+        p_rot1 = R1 @ utility.vec(target_centerline_nodes[i]) + t1
         target_centerline_nodes_transformed.append(node.CenterlineNode(i, p_rot1[0], p_rot1[1], p_rot1[2]))
-        
-    ###
-    target_centerline_nodes_transformed[curvature_differential_max_id].calc_tangentvec(target_centerline_nodes_transformed)
-    original_centerline_nodes[curvature_differential_max_id].calc_tangentvec(original_centerline_nodes)
-    R, theta, B_rot = utility.rotation_about_C_to_make_coplanar(original_centerline_nodes[curvature_differential_max_id].tangentvec, 
-                                                                target_centerline_nodes_transformed[curvature_differential_max_id].tangentvec, 
-                                                                original_centerline_nodes[curvature_differential_max_id].unit_center_dir)
-    
-    P = np.array([[nd.x, nd.y, nd.z] for nd in target_centerline_nodes_transformed], dtype=float)
-    p0 = np.asarray(utility.vec(original_centerline_nodes[curvature_differential_max_id]), dtype=float).reshape(3,)
-    P_rot2 = (R @ (P - p0).T).T + p0
-    target_centerline_nodes_transformed = [
-        type(target_centerline_nodes_transformed[0])(nd.id, p[0], p[1], p[2])
-        for nd, p in zip(target_centerline_nodes_transformed, P_rot2)
-    ]
+    # if (org_ucd is not None) and (tgt_ucd is not None) のとき: ここまでで、曲率中心方向は合っているが、接線方向にずれがある。(同一球上で2本の曲線が交差しているイメージ)
+    # else: 接線方向が一致。これでalignment終了。
+
+    # -----------------------
+    # 追加の roll 補正（unit_center_dir がある場合のみ）
+    # -----------------------
+    if (org_ucd is not None) and (tgt_ucd is not None):
+        target_centerline_nodes_transformed[i0].calc_tangentvec(target_centerline_nodes_transformed)
+        org.calc_tangentvec(original_centerline_nodes)
+
+        # 回転軸 unit_center_dir (曲線の交差点 → 球心 の方向ベクトル )が必要なので、あるときだけ呼ぶ
+        # 曲線の接線が一致するまで回転させる。これにより、2つの曲線と回転軸が同一平面(coplanar)に並ぶ
+        R2, theta, B_rot = utility.rotation_about_C_to_make_coplanar(
+            org.tangentvec,
+            target_centerline_nodes_transformed[i0].tangentvec,
+            _unit(org_ucd)
+        )
+        P  = np.array([[nd.x, nd.y, nd.z] for nd in target_centerline_nodes_transformed], dtype=float)
+        p0 = np.asarray(utility.vec(org), dtype=float).reshape(3,)
+        P2 = (R2 @ (P - p0).T).T + p0
+
+        target_centerline_nodes_transformed = [
+            type(target_centerline_nodes_transformed[0])(nd.id, p[0], p[1], p[2])
+            for nd, p in zip(target_centerline_nodes_transformed, P2)
+        ]
+    else:
+        # tangent-only のときは roll は決めない（仕様通り）
+        pass
     ###
 
     inlet_outlet_info = myio.write_csv_centerline(target_centerline_nodes_transformed,radius_list_target,target_centerline_filepath,output_dir)

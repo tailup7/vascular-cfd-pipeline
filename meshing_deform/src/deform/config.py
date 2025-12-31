@@ -1,9 +1,9 @@
 EDGESWAP          = True
 SMOOTHER_VTK      = True
-ALIGNMENT         = False
+ALIGNMENT         = True
 
 MESHSIZE          = 0.5
-SCALING_FACTOR    = 0.3
+SCALING_FACTOR    = 0.25
 FIRST_LAYER_RATIO = 0.015
 GROWTH_RATE       = 1.2
 NUM_OF_LAYERS     = 5
