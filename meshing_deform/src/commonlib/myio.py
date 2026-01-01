@@ -242,6 +242,7 @@ def read_vtk_surfacemesh(filepath_vtk):
             y=coords[1]
             z=coords[2]
             surface_node=node.NodeAny(node_id,x,y,z)
+            # vtk形式ではnodeIDは0スタートだが、本コード内では1スタートにしているので id+1 をキーとして辞書作成 
             surface_node_dict[node_id]= surface_node
             surface_nodes.append(surface_node)
             node_id+=1
@@ -533,8 +534,8 @@ def write_stl_surfacetriangles(surface_triangles,filename, output_dir):
         f.write("endsolid model\n")
     return filepath
 
-def write_vtk_surfacemesh_with_ccnID(surface_nodes,surface_triangles):
-    filepath=os.path.join("output","surfacemesh_deformed_with_ccnID.vtk")
+def write_vtk_surfacemesh_with_ccnID(surface_nodes,surface_triangles, message, output_dir):
+    filepath=output_dir / f"surfacemesh_{message}_with_ccnID.vtk"
     point_header=f"""# vtk DataFile Version 2.0
 WALL_0, Created by Gmsh 4.11.1 
 ASCII
@@ -552,13 +553,15 @@ LOOKUP_TABLE default\n"""
             f.write(f"{pt.x} {pt.y} {pt.z}\n")
         f.write(cell_header)
         for tri in surface_triangles:
+            # コード内ではnodeのIDは1スタートにしているので、vtk形式(0スタート)に合わせる
             f.write(f"3 {tri.node0.id-1} {tri.node1.id-1} {tri.node2.id-1}\n")
         f.write(celltypes_header)
         for tri in surface_triangles:
             f.write("5\n")
         f.write(celldata_header)
         for tri in surface_triangles:
-            f.write(f"{tri.correspond_centerlinenode.id-1}\n")
+            # コード内では、中心線NodeのIDは0スタート
+            f.write(f"{tri.correspond_centerlinenode.id}\n")
 
 def write_vtk_hausdorff(surface_nodes, surface_triangles, haus):
     if not os.path.exists("output"):

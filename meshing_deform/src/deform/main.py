@@ -5,7 +5,7 @@ from postcheck.openfoam_checkmesh import run_checkmesh
 import deform.config as config
 import commonlib.func as func
 import commonlib.myio as myio
-from .centerline.alignment import alignment # 関数をimport
+from .centerline.alignment import alignment
 from pathlib import Path
 
 # gmsh.model.mesh.classifySurfaces の引数はどう設定するべきか

@@ -5,6 +5,7 @@ import commonlib.meshinfo as meshinfo
 import commonlib.func as func
 import commonlib.myio as myio
 from postcheck.openfoam_checkmesh import run_checkmesh
+from postcheck.visualize_surfacetriangle_with_correspond_centerlinenode import visualize_correspondence
 from pathlib import Path
 
 def run(
@@ -39,12 +40,16 @@ def run(
 
     if radius_list == None:
         radius_list = func.calc_radius(stl_filepath, centerline_nodes, inlet_outlet_info, config, output_dir) #これは消す、変える。扁平な形状などは、最も直径が小さくなる部分で考えてメッシュサイズを設定する必要がある。
-    # myio.write_txt_parameter()
 
+    # generate background mesh and surface mesh
     func.generate_pos_bgm(stl_filepath, centerline_nodes, radius_list,"original", 40, config, output_dir)  
     surface_nodes, surface_triangles = func.make_surfacemesh(stl_filepath, mesh, "original", output_dir)
-    surface_node_dict = {}
+
+    # 今後の処理には不要。単なる可視化・確認のため。
+    visualize_correspondence(surface_triangles=surface_triangles, surface_nodes=surface_nodes, centerline_nodes=centerline_nodes, message="original", output_dir=output_dir,)
+
     # prism の押し出し量を決めるために、surface_node に radius を与える
+    surface_node_dict = {}
     for surface_node in surface_nodes:
         surface_node.find_closest_centerlinenode(centerline_nodes)
         surface_node.find_projectable_centerlineedge(centerline_nodes)    

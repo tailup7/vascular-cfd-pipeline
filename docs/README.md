@@ -1,66 +1,45 @@
+# meshing_deformのアルゴリズム
+
+ここではmeshing_deformの仕様について説明する。自分用に書き残している部分が多い。
+
 ## 構成
 ``` bash
-  myreserch/meshing_deform/src (root)
+  vascular-cfd-pipeline/meshing_deform/src (root)
    ├─ meshing/                       
-   │       └─ main.py                   
-   │       ├─ config.py
-   │       └─ README.md
-   │
+   │       ├─ main.py                   
+   │       └─ config.py
    ├─ deform/
+   │       ├─ centerline/ 
+   │       │      ├─ adjust_num_of_cl.py # TODO:バッチ処理に組み込む
+   │       │      └─ alignment.py        # 単体でも実行可能
    │       ├─ smooth/
-   │       │      ├─ edgeswap.py
-   │       │      ├─ vtkWindowedSincPolyDataFilter.py
-   │       │      └─ README.md
-   │       ├─ utils/  # 無くてもいい
-   │       │      ├─ adjust_num_of_cl.py
-   │       │      ├─ foo.py
-   │       │      └─ README.md
+   │       │      ├─ edgeswap.py         # TODO:単体で実行可能にする
+   │       │      └─ smoother_vtk.py     # TODO:単体で実行可能にする
    │       ├─ main.py
-   │       ├─ config.py
-   │       └─ README.md
-   │
-   ├─ postcheck/  # _with_ccnID.vtk を出力するコードを入れる
+   │       └─ config.py
+   ├─ postcheck/  
    │       ├─ hausdorff.py
-   │       ├─ openfoam_checkmesh.py
-   │       ├─ _with_ccnID.vtk を出力するコード
-   │       └─ README.md
-   │     
+   │       ├─ openfoam_checkmesh.py      # TODO:単体で実行可能にする
+   │       └─ visualize_surfacetriangle_with_correspond_centerlinenode.py  
    └─ commonlib/
            ├─ node.py          
            ├─ cell.py      
            ├─ boundarylayer.py
            ├─ meshinfo.py   
            ├─ func.py            
-           ├─ utility.py
-           └─ README.md
-
-Linux/Ubuntsu/home/username/
-    ├─ medical_image/
-    │        ├─ hoshina/
-    │        └─ nagita/
-    │
-    ├─ TubeFromCenterline/ # C++ プロジェクト
-    ├─ meshing_deform/     # python プロジェクト
-    │        ├─ src/
-    │        └─ data/
-    ├─ OpenFOAM            # OpenFOAM 
-    │        └─ username-vyymm/
-    │                     └─ run/
-    
+           └─ utility.py
 ```
 
-``` bash
-cd root
-python -m meshing main
-```
 
 ## ファイル形式
 gmshファイルでは、nodeIDは1スタート。<br>
 vtkファイルでは、nodeIDは0スタート。<br>
 コード内では、表面NodeのIDは1スタートに統一している<br>
+なので、`myio.read_vtk_surfacemesh()` ではnodeIDを1スタートにしてNodeインスタンス生成、`mesh.nodes`への格納をしている
 
-+ 本コードで変形時に読み込む(*.msh)ファイルの中身の形式について必要なこととして、例えばWALL三角形パッチを構成するnodeが(重複を許さずに)100個あったとして、それらのnodeIDがすべて1~100に収まっていること。それゆえに`$Node`セクションにおいて、表面(WALL)上のNodeは最初に列挙される。
++ 本コードで変形時に読み込む(*.msh)ファイルの中身の形式について必要なこととして、例えばWALL三角形パッチを構成するnodeが(重複を許さずに)100個あったとして、それらのnodeIDがすべて1~100に収まっている(IDが飛び飛びではない、つまり、WALLを構成するnode群の並びのなかに例えばINTERNALなどのnodeが混じっていない)こと。それため、本コードのmeshing実行時には、`$Node`セクションにおいて、表面(WALL)上のNodeは最初に列挙される。 ( ← この制約を利用しているのは、たしか、変形後の押し出しなどでnodeを追加していくときに、変形後の表面nodeのIDが例えば 1 ~ 100 に収まってくれていることで 変形後.mshファイルのnodeIDが素直に追加していけるようになっている点。)
 + 三角形の頂点の並びは、反時計回り。三角形自体の並びには規則性はないが、一応 WALLの三角形パッチが最初に列挙してある。
++ コード内では、中心線NodeのIDは0スタートに統一している
 
 
 ```
@@ -146,9 +125,21 @@ Gmshのプリズムは頂点を次の順で記述する
 ```
 
 特に本コードで出力する(.msh)ファイルに関しては、表面メッシュ(WALL)のnode及び三角形パッチを最初に格納するので
+
 + `$Nodes` セクションの最初のnodeはすべてWALLを構成するnode
 + `$elements`セクションの最初のelementは WALL三角形パッチ
++ コード内の変数 `triangles_WALL` リストはそのまま `surface_triangles`リストであり、IDも1スタートで(`myio.read_vtk_surfacemesh()`参照)、`original_mesh.msh`ファイル出力時の `elem_id` にそのまま使われる。
++ meshing処理中の `surface_triangles` リストの順番と、出力される`original_mesh.msh`ファイルのWALL三角形パッチの記述順は同じ。
+  
 WALL三角形パッチと、それを構成する表面nodeに関しては、(.msh) に記述されるIDをそのままコード内でのidインスタンス変数とすることで、変形前後でIDを保持する。
+
+
+### vtkファイル形式
+vtkファイルでは、`surfacemesh_original.vtk`を見れば分かるが、nodeセクションにはIDが明示的に記述されず、その記述順番(0スタート)を持ってnodeIDとし、のちのcellsセクションでnodeIDによってcellを記述する。<br>
+すなわち、**`surface_nodes`の読み書きの順番と、`surface_triangles`の読み書きの順番は対応している必要がある**。<br>
+特に注意すべきは、`surface_nodes`をvtkに出力するときは、必ずもともとの`surface_node`インスタンスが持っていたIDの順番に従って出力する。
+
+------
 
 
 ### 0. 基準となる中心線(*.csv)と表面(*.stl)を読み込む<br>
@@ -236,5 +227,3 @@ BGMに従って表面メッシュを生成・ファイル出力した後、再�
 + 比較のため、edgeswap後、vtkWindowedSincスムージングの後の2段階で表面メッシュを出力する
 + meshingに関しては、optionでoriginalのsurfacemeshのままテトラプリズムが作れるように、分岐を作る。またautoMeshing.pyのように、centerline不要でsurfaceだけからもmeshingできるような分岐も作る
 (つまり入力によって3つの選択肢。1. stlのみで、メッシュサイズを絶対値で指定してmeshing(icemに近くオーソドックス), 2. 表面メッシュをそのまま押し出し, 3. 中心線とstlの2つのデータを読み込み、半径に応じてメッシュサイズを変える(中心線を読み込まなくてもいいようにもできるかも))
-+ `_with_ccn_ID.vtk` の出力は、`postcheck`フォルダの方に`visualize_surfacenode_centerlinenode_correspondence.py` のようなファイルで分離した方がいいかも
-+ 今は`config`をすべて`meshing`フォルダ内の方を参照してしまっているので、meshingとdeformで`config`ファイルを分離する

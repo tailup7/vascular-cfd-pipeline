@@ -1,6 +1,6 @@
 EDGESWAP          = True
 SMOOTHER_VTK      = True
-ALIGNMENT         = True
+ALIGNMENT         = False
 
 MESHSIZE          = 0.5
 SCALING_FACTOR    = 0.25
