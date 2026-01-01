@@ -151,12 +151,6 @@ def read_target_centerline(filepath):
         radius_list = None
     return centerline_nodes, radius_list, inlet_outlet_info
 
-# def add_radiusinfo_to_centerlinefile(filepath_centerline, radius_list):
-#     radius_list.pop()
-#     df=pd.read_csv(filepath_centerline)
-#     df["radius"] = radius_list
-#     df.to_csv(filepath_centerline, index=False)
-
 def read_msh_tetra(filepath):
     tetra_list = []
     with open(filepath, 'r') as file:
@@ -437,19 +431,21 @@ def read_vtk_for_hausdorff(filepath_vtk):
                 triangle_id += 1
     return surface_nodes,surface_node_dict,surface_triangles,surface_triangle_dict
 
-
-# VTK（Legacy format）のサーフェスメッシュファイルに、
+# func.make_surfacemesh() 関数で作成した "surfacemesh_original.vtk" ファイルに、
 # 各 triangle に対応する「中心線ノード ID（ccnID）」を CELL_DATA として追加して
 # surfacemesh_original_with_ccnID.vtk  として出力する
 # ParaViewで、表面三角形パッチがどの中心線Nodeと対応しているか確認するための関数
 # surfacemesh_deformed_with_ccnID.vtk は、 write_vtk_surfacemesh_with_ccnID() 関数 で書く。(統一するべき)
-def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangles):
+# meshing() 処理では、表面triangleと中心線Nodeの対応付けは必要ないので surface_triangles[i_list].correspond_centerlinenode.id 
+# は値を持たない
+# なので、deform() 処理中に surfacemesh_deformed_with_ccnIDを出力する関数と合わせてこの関数も呼ぶか、
+def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangles,output_dir):
     with open(filepath_vtk, "r") as f:
         lines = f.readlines()
 
     cell_types_section = False
     cell_types_list = []
-    insert_index = None
+    insert_index = None   # 既存の行と、これから追加するとの間の仕切りとしてのID(何行目か)
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -458,8 +454,9 @@ def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangle
             num_cell_types = int(line.split()[1])
             continue
 
+        # CELL_TYPES セクションの終わりを判定する
         if cell_types_section:
-            if not line:
+            if not line:   # 空行なら
                 cell_types_section = False
                 insert_index = i  
                 continue
@@ -487,7 +484,7 @@ def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangle
         "LOOKUP_TABLE default\n"
     ] + [f"{val}\n" for val in scalar_values]
 
-    output_path = os.path.join("output", "surfacemesh_original_with_ccnID.vtk")
+    output_path = output_dir / "surfacemesh_original_with_ccnID.vtk"
     new_lines = lines[:insert_index] + cell_data_block + lines[insert_index:]
     with open(output_path, "w") as f:
         f.writelines(new_lines)
