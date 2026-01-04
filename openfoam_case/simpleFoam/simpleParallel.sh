@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ローカルPCで simpleFoam を並列実行するスクリプト
+# simpleFoam を並列実行するスクリプト
 
 set -e
 
@@ -21,13 +21,8 @@ mshfile=$(ls *.msh | head -n 1)
 [ -z "$mshfile" ] && { echo "cannot find .msh file"; exit 1; }
 echo "=== Using mesh file: $mshfile ==="
 
-# === Gmsh → OpenFOAM メッシュ変換 ===
-gmshToFoam "$mshfile"
+# === スケール変換 ===
 transformPoints -scale "(1e-3 1e-3 1e-3)"
-
-# === メッシュチェック ===
-checkMesh | tee checkMesh.log
-grep -q "Mesh OK" checkMesh.log || { echo "Mesh check failed"; exit 1; }
 
 # === boundary の WALL を wall 型に変更 ===
 sed -i '/^[[:space:]]*WALL[[:space:]]*$/,/^[[:space:]]*}[[:space:]]*$/ s/\(type[[:space:]]*\)patch;/\1wall;/' constant/polyMesh/boundary

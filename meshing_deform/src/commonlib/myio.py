@@ -151,12 +151,6 @@ def read_target_centerline(filepath):
         radius_list = None
     return centerline_nodes, radius_list, inlet_outlet_info
 
-# def add_radiusinfo_to_centerlinefile(filepath_centerline, radius_list):
-#     radius_list.pop()
-#     df=pd.read_csv(filepath_centerline)
-#     df["radius"] = radius_list
-#     df.to_csv(filepath_centerline, index=False)
-
 def read_msh_tetra(filepath):
     tetra_list = []
     with open(filepath, 'r') as file:
@@ -248,6 +242,7 @@ def read_vtk_surfacemesh(filepath_vtk):
             y=coords[1]
             z=coords[2]
             surface_node=node.NodeAny(node_id,x,y,z)
+            # vtk形式ではnodeIDは0スタートだが、本コード内では1スタートにしているので id+1 をキーとして辞書作成 
             surface_node_dict[node_id]= surface_node
             surface_nodes.append(surface_node)
             node_id+=1
@@ -437,19 +432,21 @@ def read_vtk_for_hausdorff(filepath_vtk):
                 triangle_id += 1
     return surface_nodes,surface_node_dict,surface_triangles,surface_triangle_dict
 
-
-# VTK（Legacy format）のサーフェスメッシュファイルに、
+# func.make_surfacemesh() 関数で作成した "surfacemesh_original.vtk" ファイルに、
 # 各 triangle に対応する「中心線ノード ID（ccnID）」を CELL_DATA として追加して
 # surfacemesh_original_with_ccnID.vtk  として出力する
 # ParaViewで、表面三角形パッチがどの中心線Nodeと対応しているか確認するための関数
 # surfacemesh_deformed_with_ccnID.vtk は、 write_vtk_surfacemesh_with_ccnID() 関数 で書く。(統一するべき)
-def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangles):
+# meshing() 処理では、表面triangleと中心線Nodeの対応付けは必要ないので surface_triangles[i_list].correspond_centerlinenode.id 
+# は値を持たない
+# なので、deform() 処理中に surfacemesh_deformed_with_ccnIDを出力する関数と合わせてこの関数も呼ぶか、
+def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangles,output_dir):
     with open(filepath_vtk, "r") as f:
         lines = f.readlines()
 
     cell_types_section = False
     cell_types_list = []
-    insert_index = None
+    insert_index = None   # 既存の行と、これから追加するとの間の仕切りとしてのID(何行目か)
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -458,8 +455,9 @@ def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangle
             num_cell_types = int(line.split()[1])
             continue
 
+        # CELL_TYPES セクションの終わりを判定する
         if cell_types_section:
-            if not line:
+            if not line:   # 空行なら
                 cell_types_section = False
                 insert_index = i  
                 continue
@@ -487,7 +485,7 @@ def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangle
         "LOOKUP_TABLE default\n"
     ] + [f"{val}\n" for val in scalar_values]
 
-    output_path = os.path.join("output", "surfacemesh_original_with_ccnID.vtk")
+    output_path = output_dir / "surfacemesh_original_with_ccnID.vtk"
     new_lines = lines[:insert_index] + cell_data_block + lines[insert_index:]
     with open(output_path, "w") as f:
         f.writelines(new_lines)
@@ -536,8 +534,8 @@ def write_stl_surfacetriangles(surface_triangles,filename, output_dir):
         f.write("endsolid model\n")
     return filepath
 
-def write_vtk_surfacemesh_with_ccnID(surface_nodes,surface_triangles):
-    filepath=os.path.join("output","surfacemesh_deformed_with_ccnID.vtk")
+def write_vtk_surfacemesh_with_ccnID(surface_nodes,surface_triangles, message, output_dir):
+    filepath=output_dir / f"surfacemesh_{message}_with_ccnID.vtk"
     point_header=f"""# vtk DataFile Version 2.0
 WALL_0, Created by Gmsh 4.11.1 
 ASCII
@@ -555,13 +553,15 @@ LOOKUP_TABLE default\n"""
             f.write(f"{pt.x} {pt.y} {pt.z}\n")
         f.write(cell_header)
         for tri in surface_triangles:
+            # コード内ではnodeのIDは1スタートにしているので、vtk形式(0スタート)に合わせる
             f.write(f"3 {tri.node0.id-1} {tri.node1.id-1} {tri.node2.id-1}\n")
         f.write(celltypes_header)
         for tri in surface_triangles:
             f.write("5\n")
         f.write(celldata_header)
         for tri in surface_triangles:
-            f.write(f"{tri.correspond_centerlinenode.id-1}\n")
+            # コード内では、中心線NodeのIDは0スタート
+            f.write(f"{tri.correspond_centerlinenode.id}\n")
 
 def write_vtk_hausdorff(surface_nodes, surface_triangles, haus):
     if not os.path.exists("output"):

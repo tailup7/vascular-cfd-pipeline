@@ -3,7 +3,7 @@
 # Fugaku PJM job script template
 #   - runs batch/batch.py with venv + gmsh (source-built)
 #   - project layout:
-#     meshing-deformation-cfd-batch/
+#     vascular-cfd-pipeline/
 #       venv/
 #       batch/batch.py
 #       batch/batch_cases.csv

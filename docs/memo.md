@@ -22,10 +22,10 @@ python3.12 --version
 ```
 2. Clone the repository
 ``` bash
-git clone https://github.com/ut-olab/meshing-deformation-cfd-batch.git
+git clone https://github.com/ut-olab/vascular-cfd-pipeline.git
 ```
 ``` bash
-cd meshing-deformation-cfd-batch
+cd vascular-cfd-pipeline
 ```
 3. Create and activate python venv
 ``` bash
@@ -61,7 +61,7 @@ python -m batch.py batch_cases.csv
 
 ## Project Structure
 ``` bash
-  meshing-deformation-cfd-batch/
+  vascular-cfd-pipeline/
   ├─ venv/ 
   ├─ meshing_deform/
   │     ├─ src/ 

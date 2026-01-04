@@ -2,8 +2,11 @@ tmp/
 utility/
 venv/
 runs/
+runs_archive/
 inputs/
+inputs_archive/
+BraVa/
 data/
 dataset/
-inputs_archive/
+pictures_thesis/
 delete_zone_identifier.py

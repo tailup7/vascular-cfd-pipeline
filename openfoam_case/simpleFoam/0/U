@@ -41,7 +41,7 @@ boundaryField
                 patch().lookupPatchField<volVectorField, vector>("U")
             );
 
-            const scalar umean = 0.55;
+            const scalar umean = 0.73333;
             const scalar diameter = 0.0024;
             const scalar radius = diameter / 2.0;
             vector localPositionCenter = vector::zero;

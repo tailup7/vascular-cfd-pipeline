@@ -87,30 +87,6 @@ def calc_radius(stl_filepath, centerline_nodes, inlet_outlet_info,config, output
             if countor[i]!=0:
                 radius_list[i] /= countor[i]
 
-        # 下4行 一回試験的に消してみる (25/12/4)
-        # if radius_list[0] < radius_list[1]*0.7:
-        #     radius_list[0] = radius_list[1]
-        # if radius_list[-1] < radius_list[-2]*0.7:
-        #     radius_list[-1]=radius_list[-2]
-
-        # 応急処置的 (中心線点群の端がSTLの端面に届いていない場合) 下16行、試験的に消してみる
-        # if radius_list[0] < radius_list[4]*0.7:
-        #     radius_list[0] = radius_list[4]
-        # if radius_list[-1] < radius_list[-5]*0.7:
-        #     radius_list[-1] = radius_list[-5]
-        # if radius_list[1] < radius_list[5]*0.7:
-        #     radius_list[1] = radius_list[5]
-        # if radius_list[-2] < radius_list[-6]*0.7:
-        #     radius_list[-2] = radius_list[-6]
-        # if radius_list[2] < radius_list[6]*0.7:
-        #     radius_list[2] = radius_list[6]
-        # if radius_list[-3] < radius_list[-7]*0.7:
-        #     radius_list[-3] = radius_list[-7]
-        # if radius_list[3] < radius_list[7]*0.7:
-        #     radius_list[3] = radius_list[7]
-        # if radius_list[-4] < radius_list[-8]*0.7:
-        #     radius_list[-4] = radius_list[-8]
-
         radius_list_smooth[0]  = (radius_list[0]+radius_list[1])/2
         radius_list_smooth[-1] = (radius_list[-1]+radius_list[-2])/2
         for i in range(1,len(radius_list)-1):
@@ -235,12 +211,11 @@ def make_surfacemesh(stl_filepath, mesh, filename, output_dir):
             gmsh.finalize()
     return surface_nodes, surface_triangles
 
+# 表面triangleの重心から見て、最近接する中心線nodeを探して対応付け
+# さらに表面nodeから見て、表面node → その表面nodeを頂点に持つ表面triangle → その表面triangleと対応する中心線node 
+# として、表面node → 中心線node (1 → N) の対応付けをする
 def map_surfacenode_to_centerlinenodes(surface_triangles, centerline_nodes):
     print("info_func    : start corresponding surface mesh triangles to centerline nodes") 
-    # for surface_node in surface_nodes:
-    #     surface_node.find_closest_centerlinenode(centerline_nodes)        #
-    #     surface_node.find_projectable_centerlineedge(centerline_nodes)    #
-    #     surface_node.set_edgeradius(radius_list)                          #
     for surface_triangle in surface_triangles:
         # vtkファイルは、三角形の頂点の記述順が反時計回りになっており、法線ベクトルの向きは暗示的に示されている。
         # gmsh は そのルールを守ってvtkを出力してくれるので、stlを読み込んで中心線情報も使いながら自分で法線ベクトルを計算するのではなく、
@@ -248,12 +223,9 @@ def map_surfacenode_to_centerlinenodes(surface_triangles, centerline_nodes):
         #
         # ↑ STLも法線(facet normal)と整合するように頂点を記述する。どちらかというと、make_surfacemeshでvtkとして出力するのは、
         # vtkは頂点をID管理するが、STLはしないため、頂点にIDを与えて重複排除する処理が面倒だったから。
-        # (ついでに add_scalarinfo でvtkfileとして生成する必要がある、、、)
-        # surface_triangle.calc_unitnormal(centerline_nodes)                #
         surface_triangle.calc_centroid()                                  #
         surface_triangle.find_closest_centerlinenode(centerline_nodes)    #
         surface_triangle.assign_correspondcenterlinenode_to_surface_node()
-
     print("info_func    : finish corresponding surface nodes to centerline nodes")
 
 def make_prismlayer(surface_node_dict,surface_triangles,mesh,config):
