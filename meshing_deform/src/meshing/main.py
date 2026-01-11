@@ -1,12 +1,9 @@
-import time
+from pathlib import Path
 import gmsh
 import meshing.config as config
-import commonlib.meshinfo as meshinfo
-import commonlib.func as func
-import commonlib.myio as myio
+from commonlib import meshinfo, myio, func
 from postcheck.openfoam_checkmesh import run_checkmesh
 from postcheck.visualize_surfacetriangle_with_correspond_centerlinenode import visualize_correspondence
-from pathlib import Path
 
 def run(
     centerline_filepath = None,
@@ -14,7 +11,6 @@ def run(
     output_dir          = None,
     interactive         = True,
     ):
-    start = time.time()
     mesh  = meshinfo.Mesh() 
 
     # get input files
@@ -35,11 +31,14 @@ def run(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok = True)
 
-    # copy input files to output folder for backup
-    myio.copy_files_to_dir(centerline_filepath, stl_filepath, dst_dir = output_dir / "input", overwrite = True)
+    # copy input files and setting file to output folder for backup
+    myio.copy_files_to_dir(centerline_filepath, stl_filepath, output_dir=output_dir, meshing_or_deform="meshing", overwrite = True)
 
+    # 入力ファイルにradiusカラムが無ければ計算する。このとき、中心線上の各点での垂直断面における最小内接円の半径としてradiusを計算する
     if radius_list == None:
-        radius_list = func.calc_radius(stl_filepath, centerline_nodes, inlet_outlet_info, config, output_dir) #これは消す、変える。扁平な形状などは、最も直径が小さくなる部分で考えてメッシュサイズを設定する必要がある。
+        for i in range(len(centerline_nodes)):
+            centerline_nodes[i].calc_tangentvec(centerline_nodes)
+        radius_list = func.radius_by_perp_section(stl_filepath, centerline_nodes, centerline_filename, inlet_outlet_info, output_dir) 
 
     # generate background mesh and surface mesh
     func.generate_pos_bgm(stl_filepath, centerline_nodes, radius_list,"original", 40, config, output_dir)  
@@ -55,24 +54,24 @@ def run(
         surface_node.find_projectable_centerlineedge(centerline_nodes)    
         surface_node.set_edgeradius(radius_list,config)
         surface_node_dict[surface_node.id] = surface_node
+
+    # generate inner mesh (prism & tetra)
     mesh, layernode_dict = func.make_prismlayer(surface_node_dict,surface_triangles,mesh,config)
     func.make_tetramesh(layernode_dict,mesh,inlet_outlet_info,"original",config, output_dir)
     mesh = func.naming_inlet_outlet(mesh,centerline_nodes,config)
 
     # output and visualize the mesh
-    myio.write_msh_allmesh(mesh,"original", output_dir) 
-    gmsh.initialize()
-    gmsh.merge(str(output_dir / "original_mesh.msh"))
-    gmsh.write(str(output_dir / "original_mesh.vtk"))
-    end = time.time()
-    if interactive:
-        func.GUI_setting()
-        gmsh.fltk.run()
-    gmsh.finalize()
-
-    elapsed_time = end-start
-    print("-------- Finished Make Mesh --------")
-    print(f"elapsed time : {elapsed_time:.4f} s")
+    myio.write_msh_allmesh(mesh,"original", output_dir)
+    try:
+        if not gmsh.isInitialized(): 
+            gmsh.initialize()
+        gmsh.merge(str(output_dir / "original_mesh.msh"))
+        gmsh.write(str(output_dir / "original_mesh.vtk"))
+        if interactive:
+            func.GUI_setting()
+            gmsh.fltk.run()
+    finally:       
+        gmsh.finalize()
     return output_dir
 
 def main():

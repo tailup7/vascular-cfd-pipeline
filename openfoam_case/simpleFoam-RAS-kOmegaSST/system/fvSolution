@@ -20,14 +20,31 @@ solvers
     p
     {
         solver          GAMG;
-	    smoother        GaussSeidel;
+        smoother        GaussSeidel;
         tolerance       1e-8;
         relTol          0;
         maxIter         100;
     }
 
-
     U
+    {
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        tolerance       1e-8;
+        relTol          0;
+        maxIter         100;
+    }
+
+    k
+    {
+        solver          smoothSolver;
+        smoother        symGaussSeidel;
+        tolerance       1e-8;
+        relTol          0;
+        maxIter         100;
+    }
+
+    omega
     {
         solver          smoothSolver;
         smoother        symGaussSeidel;
@@ -39,22 +56,29 @@ solvers
 
 SIMPLE
 {
-    nNonOrthogonalCorrectors 1;
-    consistent      yes;
+    nNonOrthogonalCorrectors 2;   // 1→2に上げると安定することが多い
+    consistent yes;
 
-    residualControl //simpleソルバの場合、Initial residualがこの閾値を下回ったら計算を止める
+    residualControl
     {
-        p               1e-6;
-        U               1e-6;
+        p 1e-5;    // まず緩め→安定したら厳しく
+        U 1e-5;
+        k 1e-5;
+        omega 1e-5;
     }
 }
 
 relaxationFactors
 {
+    fields
+    {
+        p 0.3;
+    }
     equations
     {
-        // P               0.7; // 0.9 is more stable but 0.95 more convergent
-        U               0.7; // 0.9 is more stable but 0.95 more convergent
+        U     0.5;     // 0.7→0.5くらいが無難
+        k     0.5;
+        omega 0.5;
     }
 }
 

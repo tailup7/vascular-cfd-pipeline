@@ -15,7 +15,7 @@ def as_array_nodes(nodes):
     coords = np.empty((len(nodes), 3), dtype=float)
     id_to_idx = {}
     for i, nd in enumerate(nodes):
-        v = utility.vector(nd)
+        v = utility.vec(nd)
         coords[i, :] = v
         id_to_idx[nd.id] = i
     return coords, id_to_idx

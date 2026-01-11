@@ -1,14 +1,12 @@
-import commonlib.node as node
-import commonlib.cell as cell
-import commonlib.utility as utility
-import commonlib.node as node
 import os
-from pathlib import Path
+import csv
 import shutil
+from pathlib import Path
+from typing import Literal
 import pandas as pd
 import numpy as np
-import csv
 from numpy.polynomial.polynomial import Polynomial
+from commonlib import node, cell, utility
 
 class InletOutletInfo:
     def __init__(self, inlet_point, outlet_point):
@@ -97,43 +95,13 @@ def select_msh():
     root.destroy()
     return filepath
 
-# もう使わないので消す
-# def input_meshing_parameter():
-#     print("------- mesh parameter -------")
-#     print("MESHSIZE_SCALING_FACTOR :", config.SCALING_FACTOR)
-#     print("FIRST_LAYER_RATIO       :", config.FIRST_LAYER_RATIO)
-#     print("GROWTH_RATE             :", config.GROWTH_RATE)
-#     print("NUM_OF_LAYERS           :", config.NUM_OF_LAYERS)
-#     change = input("Change parameters? (y/n): ").strip().lower()
-#     if change == "y":
-#         try:
-#             config.SCALING_FACTOR    = float(input("Enter MESHSIZE_SCALING_FACOTOR: "))
-#             config.FIRST_LAYER_RATIO = float(input("Enter FIRST_LAYER_RATIO: "))
-#             config.GROWTH_RATE       = float(input("Enter GROWTH_RATE: "))
-#             config.NUM_OF_LAYERS     = int(input("Enter NUM_OF_LAYERS: "))
-#         except ValueError:
-#             print("Invalid input. Using default values.")
-# 
-# def write_txt_parameter():
-#     filepath = str(config.OUTPUT_DIR /  "memo.txt")
-#     lines = [
-#     # f"num of centerlinenodes  : {config.num_of_centerlinenodes}",
-#     f"MESHSIZE                : {config.MESHSIZE}",
-#     f"MESHSIZE_SCALING_FACTOR : {config.SCALING_FACTOR}",
-#     f"FIRST_LAYER_RATIO       : {config.FIRST_LAYER_RATIO}",
-#     f"GROWTH_RATE             : {config.GROWTH_RATE}",
-#     f"NUM_OF_LAYERS           : {config.NUM_OF_LAYERS}",]
-#     with open(filepath, "w") as f:
-#         for line in lines:
-#             f.write(line + "\n")
-
-# todo: original と targetで中心線の点数が違う時にerror出すように
+# TODO: original と targetで中心線の点数が違う時にerror出すように
 def read_original_centerline(filepath):
     df = pd.read_csv(filepath)
     centerline_nodes    = [node.CenterlineNode(index, row['x'], row['y'], row['z']) for index, row in df.iterrows()]
     return centerline_nodes
 
-# todo: original と targetで中心線の点数が違う時にerror出すように
+# TODO: original と targetで中心線の点数が違う時にerror出すように
 def read_target_centerline(filepath):
     df = pd.read_csv(filepath)
     centerline_nodes    = [node.CenterlineNode(index, row['x'], row['y'], row['z']) for index, row in df.iterrows()]
@@ -163,6 +131,13 @@ def read_msh_tetra(filepath):
     print("info_myio    : num of tetra is",len(tetra_list))
     return tetra_list
 
+def write_csv_radius(radius_list, filename, output_dir):
+    filepath = output_dir / f"{filename}_radius.csv"
+    with open(filepath, "w", encoding="utf-8", newline="") as f:
+        f.write("radius\n") 
+        for i in range(len(radius_list)):
+            f.write(f"{radius_list[i]}\n")
+
 def write_pos_bgm(tetra_list,nodeany_dict,filename, output_dir):
     filepath = str(output_dir / f"bgm_{filename}.pos")
     with open(filepath, 'w') as f:
@@ -189,7 +164,7 @@ def write_pos_bgm(tetra_list,nodeany_dict,filename, output_dir):
 
 def write_csv_centerline(centerline_nodes,radius_list,filepath,output_dir):
     out_dir = Path(output_dir)
-    input_dir = out_dir / "input"
+    input_dir = out_dir / "inputs"
     input_dir.mkdir(parents=True, exist_ok=True)
     path = Path(filepath)
     new_filename = f"{path.stem}_transformed{path.suffix}"
@@ -269,7 +244,7 @@ def read_vtk_surfacemesh(filepath_vtk):
     
     return surface_nodes,surface_triangles
 
-def read_msh_original_WALL(filepath_msh,mesh):
+def read_msh_original_WALL(filepath_msh, mesh):
     """
     Gmsh v2 ASCII .msh を読み込んで、
     - PhysicalName "WALL" の三角形要素だけを抽出し
@@ -375,7 +350,7 @@ def read_msh_original_WALL(filepath_msh,mesh):
             i += 1
     mesh.num_of_surfacenodes     = len(surface_nodes)
     mesh.num_of_surfacetriangles = len(surface_triangles)
-    return surface_nodes,surface_triangles
+    return surface_nodes, surface_triangles
 
 def read_vtk_for_hausdorff(filepath_vtk):
     with open(filepath_vtk, 'r') as file:
@@ -431,64 +406,6 @@ def read_vtk_for_hausdorff(filepath_vtk):
                 surface_node_dict[cell_data[3]+1].append(triangle_id)
                 triangle_id += 1
     return surface_nodes,surface_node_dict,surface_triangles,surface_triangle_dict
-
-# func.make_surfacemesh() 関数で作成した "surfacemesh_original.vtk" ファイルに、
-# 各 triangle に対応する「中心線ノード ID（ccnID）」を CELL_DATA として追加して
-# surfacemesh_original_with_ccnID.vtk  として出力する
-# ParaViewで、表面三角形パッチがどの中心線Nodeと対応しているか確認するための関数
-# surfacemesh_deformed_with_ccnID.vtk は、 write_vtk_surfacemesh_with_ccnID() 関数 で書く。(統一するべき)
-# meshing() 処理では、表面triangleと中心線Nodeの対応付けは必要ないので surface_triangles[i_list].correspond_centerlinenode.id 
-# は値を持たない
-# なので、deform() 処理中に surfacemesh_deformed_with_ccnIDを出力する関数と合わせてこの関数も呼ぶか、
-def add_scalarinfo_to_surfacemesh_original_vtkfile(filepath_vtk,surface_triangles,output_dir):
-    with open(filepath_vtk, "r") as f:
-        lines = f.readlines()
-
-    cell_types_section = False
-    cell_types_list = []
-    insert_index = None   # 既存の行と、これから追加するとの間の仕切りとしてのID(何行目か)
-
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if line.startswith("CELL_TYPES"):
-            cell_types_section = True
-            num_cell_types = int(line.split()[1])
-            continue
-
-        # CELL_TYPES セクションの終わりを判定する
-        if cell_types_section:
-            if not line:   # 空行なら
-                cell_types_section = False
-                insert_index = i  
-                continue
-            try:
-                val = int(line)
-                cell_types_list.append(val)
-            except ValueError:
-                continue
-
-    if insert_index is None:
-        insert_index = len(lines)
-    scalar_values = []
-    i_list = 0
-    for ct in cell_types_list:
-        if ct == 5:
-            scalar_values.append(surface_triangles[i_list].correspond_centerlinenode.id)
-            i_list += 1
-        else:
-            scalar_values.append(0.0)
-
-    # CELL_DATA セクションの生成
-    cell_data_block = [
-        f"\nCELL_DATA {len(cell_types_list)}\n",
-        f"SCALARS ccnID float 1\n",
-        "LOOKUP_TABLE default\n"
-    ] + [f"{val}\n" for val in scalar_values]
-
-    output_path = output_dir / "surfacemesh_original_with_ccnID.vtk"
-    new_lines = lines[:insert_index] + cell_data_block + lines[insert_index:]
-    with open(output_path, "w") as f:
-        f.writelines(new_lines)
 
 def write_stl_innersurface(mesh,layernode_dict,config,output_dir):
     filename = "innersurface_" + str(config.NUM_OF_LAYERS) + ".stl"
@@ -787,9 +704,7 @@ def write_msh_allmesh(mesh,filename,output_dir):
         for prism in mesh.prisms_INTERNAL:
             elements_countor+=1
             f.write(f"{elements_countor} 6 2 100 1 {prism.id0} {prism.id1} {prism.id2} {prism.id3} {prism.id4} {prism.id5}\n")
-
         f.write("$EndElements\n")
-
 
 def convert_stl_to_vtk(filepath_stl):
     # 入力ファイルの拡張子無しのファイル名
@@ -857,7 +772,8 @@ def convert_stl_to_vtk(filepath_stl):
 
 def copy_files_to_dir(
     *src_files: str | Path,
-    dst_dir: str | Path,
+    output_dir: str | Path,
+    meshing_or_deform: Literal["meshing", "deform"],
     overwrite: bool = False,
     keep_metadata: bool = True,
     ) :
@@ -867,8 +783,8 @@ def copy_files_to_dir(
     ----------
     *src_files : str | Path
         コピー元ファイルの絶対パス（2個でも3個でも可）
-    dst_dir : str | Path
-        コピー先フォルダ
+    output_dir : str | Path
+
     overwrite : bool
         True の場合、同名ファイルがあれば上書き
     keep_metadata : bool
@@ -878,9 +794,11 @@ def copy_files_to_dir(
     list[Path]
         コピーされたファイルのパス一覧
     """
+    # 入力ファイルを runs / <case> / inputs にコピーする
     if len(src_files) < 2:
         raise ValueError("please select src_files more than two.")
-    dst = Path(dst_dir).expanduser().resolve()
+    out = Path(output_dir).expanduser().resolve()
+    dst = out / "inputs"
     dst.mkdir(parents=True, exist_ok=True)
     copier = shutil.copy2 if keep_metadata else shutil.copy
     for src_file in src_files:
@@ -891,3 +809,16 @@ def copy_files_to_dir(
         if dst_file.exists() and not overwrite:
             raise FileExistsError(f"same name file already exists: {dst_file}")
         copier(src, dst_file)
+    # config.py ファイルを runs / <case> にコピーする
+    THIS_FILEPATH = Path(__file__).resolve()
+    SRC_DIR       = THIS_FILEPATH.parent.parent
+    if meshing_or_deform == "meshing":
+        CONFIG_FILEPATH = SRC_DIR / "meshing" / "config.py"
+    elif meshing_or_deform == "deform":
+        CONFIG_FILEPATH = SRC_DIR / "deform" / "config.py"
+    else:
+        raise ValueError(f"invalid meshing_or_deform: {meshing_or_deform!r}")
+    if not CONFIG_FILEPATH.is_file():
+        raise FileNotFoundError(f"config.py not found: {CONFIG_FILEPATH}")
+    dst_config = out / "config.py"
+    copier(CONFIG_FILEPATH, dst_config)

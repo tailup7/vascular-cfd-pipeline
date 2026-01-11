@@ -7,7 +7,6 @@ SRC_DIR             = Path(__file__).resolve().parent.parent
 PROJECT_ROOT_PARENT = SRC_DIR.parent.parent
 case_dir            = PROJECT_ROOT_PARENT / "openfoam_case" / "simpleFoam"
 
-
 def run_checkmesh(mesh_path):
     """
     Parameters

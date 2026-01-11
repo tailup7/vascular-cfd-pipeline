@@ -1,5 +1,4 @@
-import commonlib.utility as utility
-import commonlib.cell as cell
+from commonlib import cell, utility
 
 class PairDict:
     def __init__(self):

@@ -1,12 +1,13 @@
 #  vascular-cfd-pipeline
-A repository for generating, deforming, and performing fluid flow simulations of patient-specific vascular models based on centerline information, with support for batch processing.
+A repository for generating, deforming, and performing fluid flow simulations of patient-specific vascular models based on centerline information, with support for batch processing.<br>
+The core functionality of this repository is implemented in `meshing_deform`, which provides centerline-driven CFD mesh generation, mesh deformation, and post-processing utilities for patient-specific vascular models.
 
 ## Features
 - Automatic generation of tetra–prism hybrid meshes for CFD from tubular geometries
 - Adaptive control of prism layer thickness and mesh resolution based on local radius, without explicit domain partitioning
 - Centerline-based deformation of prism meshes while preserving element counts
 - Batch processing of the entire pipeline, including CFD simulations, for multiple datasets
-- Parallel execution for multiple cases on HPC systems such as [Fugaku](docs/fugaku/)
+- Parallel execution for multiple cases on HPC systems such as [Fugaku](https://www.r-ccs.riken.jp/fugaku/)
 
 ## Pipeline
 1. Generate a surface mesh from a centerline ([TubeFromCenterline](TubeFromCenterline/))
@@ -19,8 +20,8 @@ A repository for generating, deforming, and performing fluid flow simulations of
 
 ## Requirements
 + Linux
-   + Python3.11 or Python3.12
-   + OpenFOAM
++ Python3.11 or Python3.12
++ OpenFOAM
 
 ## Getting Started
 ### Getting Started on Local Machine (Linux)
@@ -50,30 +51,37 @@ A repository for generating, deforming, and performing fluid flow simulations of
    # or
    python -m deform.main
    ```
-   
+
+**(Optional) Run batch pipeline for multiple cases**
+``` bash
+cd batch
+python batch_auto.py
+```
+
 ### Getting Started on Fugaku
 See the documentation [here](docs/fugaku) .
 
 ## Project Structure
 ``` bash
-  vascular-cfd-pipeline/
-  ├─ meshing_deform/
+  vascular-cfd-pipeline/ 
+  ├─ meshing_deform/       # Core library of this repository
   │     ├─ src/ 
-  │     │    ├─ meshing/
-  │     │    ├─ deform/
+  │     │    ├─ meshing/   # surface → tetra–prism hybrid meshing   
+  │     │    ├─ deform/    # centerline-based mesh deformation
   │     │    ├─ postcheck/ 
   │     │    └─ commonlib/
   │     ├─ requirements.txt
   │     └─ pyproject.toml  
   ├─ TubeFromCenterline/   # generate surface(*.stl) from centerline(*.csv) 
-  ├─ openfoam_cases/    # template cases
+  ├─ openfoam_cases/       # template cases
   │     ├─ simpleFoam/
   │     └─ pimpleFoam/
   ├─ batch/
-  ├─ inputs/           # input data (not generated automatically)
-  │     ├─ original/   # 基準メッシュの生成に用いる中心線(*.csv)と表面(*.stl)
-  │     └─ target/     # 変形目標となる中心線(*.csv). バッチ処理のため複数case
-  ├─ runs/             # generated outputs (safe to delete)
+  │     └─ batch_auto.py   # run batch process
+  ├─ inputs/               # input data 
+  │     ├─ original/   
+  │     └─ target/     
+  ├─ runs/                 # generated outputs (safe to delete)
   │     ├─ run_case1/ 
   │     ├─ run_case2/
   │     ...
@@ -88,6 +96,7 @@ See the documentation [here](docs/fugaku) .
                 └─ README.md
 
 ```
+
 
 
 

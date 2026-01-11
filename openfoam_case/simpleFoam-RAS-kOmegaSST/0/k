@@ -1,0 +1,34 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      k;
+}
+dimensions      [0 2 -2 0 0 0 0];
+internalField   uniform 1e-6;
+
+boundaryField
+{
+    INLET
+    {
+        type            turbulentIntensityKineticEnergyInlet;
+        intensity       0.01;     // 例: 1%
+        value           uniform 1e-6;
+    }
+    OUTLET
+    {
+        type            zeroGradient;
+    }
+    WALL
+    {
+        type            kqRWallFunction;   // 壁関数を使う場合
+        value           uniform 1e-10;
+    }
+    defaultFaces
+    {
+        type            kqRWallFunction;
+        value           uniform 1e-10;
+    }
+}

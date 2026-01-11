@@ -1,13 +1,9 @@
 from __future__ import annotations
-
-import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from pathlib import Path
-import commonlib.utility as utility
-import commonlib.node as node
-import commonlib.myio as myio
 import numpy as np
 import pandas as pd
+from commonlib import node, utility, myio
 
 def _unit(v, eps=1e-12):
     v = np.asarray(v, dtype=float).reshape(3,)
@@ -62,7 +58,6 @@ def alignment(original_centerline_nodes,target_centerline_nodes, radius_list_tar
         R1 = utility.rotation_matrix_from_A_to_B(tgt_tan, org_tan)
         t1 = utility.vec(org) - (R1 @ utility.vec(tgt))
 
-
     target_centerline_nodes_transformed = []
     for i in range(len(original_centerline_nodes)):
         p_rot1 = R1 @ utility.vec(target_centerline_nodes[i]) + t1
@@ -99,8 +94,6 @@ def alignment(original_centerline_nodes,target_centerline_nodes, radius_list_tar
 
     inlet_outlet_info = myio.write_csv_centerline(target_centerline_nodes_transformed,radius_list_target,target_centerline_filepath,output_dir)
     return target_centerline_nodes_transformed,inlet_outlet_info
-
-
 
 def alignment_by_two_node_ids(
     original_centerline_nodes,
@@ -177,22 +170,22 @@ def alignment_by_two_node_ids(
 def write_centerline_csv(csv_path: Path, nodes, radius_list):
     """
     CSV: x,y,z,radius で保存
+    radius is Noneのときは x,y,zのみ書き出し
     """
     csv_path = Path(csv_path).resolve()
-    radius_list_new=[]
-    for i in range(len(radius_list)-1):
-        radius_list_new.append(radius_list[i])
-    if len(nodes) != len(radius_list_new):
-        raise ValueError("nodes , radius_list : Length mismatch ")
-
-    out = pd.DataFrame(
-        {
-            "x": [nd.x for nd in nodes],
-            "y": [nd.y for nd in nodes],
-            "z": [nd.z for nd in nodes],
-            "radius": radius_list_new,
-        }
-    )
+    data = {
+        "x": [nd.x for nd in nodes],
+        "y": [nd.y for nd in nodes],
+        "z": [nd.z for nd in nodes],
+    }
+    if radius_list is not None:
+        radius_list_new = []
+        for i in range(len(radius_list) - 1):
+            radius_list_new.append(radius_list[i])
+        if len(nodes) != len(radius_list_new):
+            raise ValueError("nodes , radius_list : Length mismatch")
+        data["radius"] = radius_list_new
+    out = pd.DataFrame(data)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(csv_path, index=False)
 
@@ -262,13 +255,11 @@ def run_alignment_gui():
         messagebox.showerror("Error",
             f"An error occurred during processing:\n\n{e}",)
         return
-
     
     messagebox.showinfo(
         "Completed",
         f"The aligned centerline has been saved successfully:\n\n{out_path}",
     )
-
 
 if __name__ == "__main__":
     run_alignment_gui()

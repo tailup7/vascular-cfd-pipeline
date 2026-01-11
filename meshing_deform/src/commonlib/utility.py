@@ -5,6 +5,12 @@ def vec(node):
     vec = np.array([node.x,node.y,node.z])
     return vec
 
+def unit(vec, eps=1e-12):
+    n = np.linalg.norm(vec)
+    if n < eps:
+        return None
+    return vec / n
+
 def can_P_project_to_AB(P,A,B):
 
 #             projectable                        Not projectable
@@ -66,9 +72,6 @@ def find_nearest_neighbors(instance_list_A,instance_list_B):
     nearest_pairs = [(instance_list_A[i], instance_list_B[indices[i]], distances[i]) for i in range(len(instance_list_A))]
     return nearest_pairs
 
-def vector(point):
-    return np.array([point.x,point.y,point.z])
-
 def find_right_neighbors(points,innerpoint_vec):
     centroid=calculate_centroid(points)
     point_temp=points[0]
@@ -77,8 +80,8 @@ def find_right_neighbors(points,innerpoint_vec):
     while point_temp.right_node_id==None:
         for point in points:
             if point_temp.id!=point.id:
-                if np.dot(np.cross(vector(point_temp)-centroid,vector(point)-centroid),centroid-innerpoint_vec) >0:
-                    distance = np.linalg.norm(vector(point)-vector(point_temp))
+                if np.dot(np.cross(vec(point_temp)-centroid,vec(point)-centroid),centroid-innerpoint_vec) >0:
+                    distance = np.linalg.norm(vec(point)-vec(point_temp))
                     if distance < min_distance:
                         min_distance = distance
                         point_temp.right_node_id = point.id
@@ -91,9 +94,9 @@ def calc_point_to_triangle_distance(P, A, B, C):
     点 P と三角形 ABC の最短距離を計算
     """
     # 辺ベクトル
-    AB = vector(B) - vector(A)
-    AC = vector(C) - vector(A)
-    AP = vector(P) - vector(A)
+    AB = vec(B) - vec(A)
+    AC = vec(C) - vec(A)
+    AP = vec(P) - vec(A)
 
     # 各種スカラー積
     d1 = np.dot(AB, AP)
@@ -121,10 +124,10 @@ def calc_point_to_triangle_distance(P, A, B, C):
     else:
         # 外側 → 各辺との距離 or 頂点との距離の最小値
         def segment_distance(P, Q, R):
-            t = np.dot(vector(P) - vector(Q), vector(R) - vector(Q)) / np.dot(vector(R) - vector(Q), vector(R) - vector(Q))
+            t = np.dot(vec(P) - vec(Q), vec(R) - vec(Q)) / np.dot(vec(R) - vec(Q), vec(R) - vec(Q))
             t = np.clip(t, 0, 1)
-            projection = vector(Q) + t * (vector(R) - vector(Q))
-            return np.linalg.norm(vector(P) - projection)
+            projection = vec(Q) + t * (vec(R) - vec(Q))
+            return np.linalg.norm(vec(P) - projection)
 
         dist = min(
             segment_distance(P, A, B),
@@ -264,23 +267,5 @@ def moving_average_for_tangentvec(centerline_nodes):
     tangentvec_smoothed_list[-3] = sum(node.tangentvec for node in centerline_nodes[-6:]) / 6
     for i in range(3,len(centerline_nodes)-3):
         tangentvec_smoothed_list[i] = sum(node.tangentvec for node in centerline_nodes[i-3:i+4]) / 7
-    for i in range(len(centerline_nodes)):
-        centerline_nodes[i].tangentvec = tangentvec_smoothed_list[i]
-
-# vmtk等で抽出した中心線は摂動を含むので、隣接11点(左側5点+自分自身+右側5点)の移動平均で平滑化する
-def moving_average_for_tangentvec_ver2(centerline_nodes):
-    tangentvec_smoothed_list = [0]*len(centerline_nodes)
-    tangentvec_smoothed_list[0] = sum(node.tangentvec for node in centerline_nodes[:6]) / 6
-    tangentvec_smoothed_list[1] = sum(node.tangentvec for node in centerline_nodes[:7]) / 7
-    tangentvec_smoothed_list[2] = sum(node.tangentvec for node in centerline_nodes[:8]) / 8
-    tangentvec_smoothed_list[3] = sum(node.tangentvec for node in centerline_nodes[:9]) / 9
-    tangentvec_smoothed_list[4] = sum(node.tangentvec for node in centerline_nodes[:10]) / 10
-    tangentvec_smoothed_list[-1] = sum(node.tangentvec for node in centerline_nodes[-6:]) / 6
-    tangentvec_smoothed_list[-2] = sum(node.tangentvec for node in centerline_nodes[-7:]) / 7
-    tangentvec_smoothed_list[-3] = sum(node.tangentvec for node in centerline_nodes[-8:]) / 8
-    tangentvec_smoothed_list[-4] = sum(node.tangentvec for node in centerline_nodes[-9:]) / 9
-    tangentvec_smoothed_list[-5] = sum(node.tangentvec for node in centerline_nodes[-10:]) / 10
-    for i in range(5,len(centerline_nodes)-5):
-        tangentvec_smoothed_list[i] = sum(node.tangentvec for node in centerline_nodes[i-5:i+6]) / 11
     for i in range(len(centerline_nodes)):
         centerline_nodes[i].tangentvec = tangentvec_smoothed_list[i]

@@ -1,7 +1,5 @@
-import commonlib.utility as utility
-import commonlib.node as node
-import commonlib.cell as cell
 import numpy as np
+from commonlib import utility, node,cell
 
 def make_nthlayer_surface_node(n, surface_node_dict,surface_triangles, mesh, config):
     temp = set()
@@ -10,6 +8,7 @@ def make_nthlayer_surface_node(n, surface_node_dict,surface_triangles, mesh, con
     for surface_triangle in surface_triangles:
         nodes = [surface_triangle.node0, surface_triangle.node1, surface_triangle.node2]
         for onenode in nodes:
+            # scaling_factor = n層目までの総合高さ(直径比)  * 断面と等価な面積を持つ真円の直径 
             scalingfactor = utility.calculate_nth_layer_thickratio(n, config)*onenode.scalar_forlayer
             if onenode.id in temp:
                 nth_layer_surface_node_dict[onenode.id].x += scalingfactor*surface_triangle.unitnormal_in[0]

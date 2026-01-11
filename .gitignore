@@ -3,10 +3,12 @@ utility/
 venv/
 runs/
 runs_archive/
+runs_hoshina/
 inputs/
 inputs_archive/
 BraVa/
 data/
 dataset/
+thesis/
 pictures_thesis/
 delete_zone_identifier.py

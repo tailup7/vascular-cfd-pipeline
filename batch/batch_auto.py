@@ -96,10 +96,10 @@ def ensure_original_mesh(original_dir: Path) -> Path:
     log_path = (PROJECT_ROOT / "runs" / "log.txt").resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as f:
-        f.write(f"d-{centerline_filepath.stem} {check["status"]}\n")
+        f.write(f"m-{centerline_filepath.stem} {check["status"]}\n")
     # checkMesh OK なら solverを実行
-    if check["ok"]:
-        run_simple_parallel(Path(check["case_dir"]),np=8)
+    # if check["ok"]:
+    #     run_simple_parallel(Path(check["case_dir"]),np=8)
     return copied_mesh
 
 
@@ -155,8 +155,8 @@ def run_deform_all(original_dir: Path, target_dir: Path):
                 f.write(f"d-{target_centerline_filepath.stem} {check["status"]}\n")
 
             # checkMesh OK なら solverを実行
-            if check["ok"]:
-                run_simple_parallel(Path(check["case_dir"]),np=8)
+            # if check["ok"]:
+            #     run_simple_parallel(Path(check["case_dir"]),np=8)
 
         except Exception as e:
             print(f"[ERROR] target={target_centerline_filepath.name} : {e}", file=sys.stderr)

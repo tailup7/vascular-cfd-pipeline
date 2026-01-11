@@ -1,15 +1,10 @@
-import commonlib.node as node
-import commonlib.myio as myio
-import commonlib.boundarylayer as boundarylayer
-import deform.smooth.edgeswap as edgeswap
-import deform.smooth.smoother_vtk as smoother_vtk
-import gmsh
-import os
-import numpy as np
 import sys
-import trimesh
-import commonlib.utility as utility
-import commonlib.cell as cell
+import gmsh
+import pyvista as pv
+import numpy as np
+import vtk
+from commonlib import node, cell, utility, myio, boundarylayer
+from deform.smooth import edgeswap, smoother_vtk
 
 class PairDict:
     def __init__(self):
@@ -29,76 +24,54 @@ class PairDict:
     def get_value(self, a, b):
         return self.pair_dict.get(self._normalize_pair(a, b))
 
-# この関数は消す、使わないようにする。代わりにvmtkで出力される最大内接球の半径を使う
-def calc_radius(stl_filepath, centerline_nodes, inlet_outlet_info,config, output_dir):
-    # 半径計算のため、読み込んだ表面形状を細かく再メッシュ
-    try:
-        if not gmsh.isInitialized():
-            gmsh.initialize()
-        path = os.path.dirname(os.path.abspath(__file__))
-        gmsh.merge(os.path.join(path, stl_filepath)) 
-        gmsh.model.mesh.classifySurfaces(angle = 40 * np.pi / 180, boundary=True, forReparametrization=True)
-        gmsh.model.mesh.createGeometry()
-        gmsh.model.geo.synchronize()
-        gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
-        gmsh.option.setNumber("Mesh.OptimizeThreshold", 0.9)
-        gmsh.option.setNumber('Mesh.Algorithm', 1)
-        gmsh.option.setNumber("Mesh.MeshSizeMin", config.MESHSIZE*0.5)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", config.MESHSIZE*0.5)
-        gmsh.model.mesh.generate(2)
+def polyline_min_distance(point_xyz: np.ndarray, line_polydata: vtk.vtkPolyData):
+    """
+    line_polydata: vtkPolyData with LINES (from cutter)
+    Returns minimum distance from point to the polyline set.
+    """
+    if line_polydata is None or line_polydata.GetNumberOfCells() == 0:
+        return None
 
-        stl_filepath = str( output_dir / f"for_calculate_radius.stl" )
-        gmsh.write(stl_filepath)
+    locator = vtk.vtkCellLocator()
+    locator.SetDataSet(line_polydata)
+    locator.BuildLocator()
 
-        mesh = trimesh.load_mesh(stl_filepath)
-        vertices = mesh.vertices 
-        unique_nodes = np.unique(vertices, axis=0)
-        surface_nodes = unique_nodes.tolist()
+    closest = [0.0, 0.0, 0.0]
+    cell_id = vtk.reference(0)
+    sub_id = vtk.reference(0)
+    dist2 = vtk.reference(0.0)
 
-        radius_list=[]
-        countor=[]    
-        radius_list_smooth = []
-        for i in range(len(centerline_nodes)+1):
-            radius_list.append(0.0)
-            countor.append(0)
-            radius_list_smooth.append(0.0)
+    locator.FindClosestPoint(point_xyz.tolist(), closest, cell_id, sub_id, dist2)
+    return float(np.sqrt(dist2.get()))
 
-        for i in range(len(surface_nodes)):
-            surface_node=node.NodeAny(i,surface_nodes[i][0],surface_nodes[i][1],surface_nodes[i][2])
-            surface_node.find_closest_centerlinenode(centerline_nodes)
-            surface_node.find_projectable_centerlineedge(centerline_nodes)
-            if surface_node.projectable_centerlineedge_id != None:
-                radius_list[surface_node.projectable_centerlineedge_id+1] += surface_node.projectable_centerlineedge_distance
-                countor[surface_node.projectable_centerlineedge_id+1]+=1
-            else:
-                if surface_node.closest_centerlinenode_id==0:
-                    radius_list[0] += utility.calculate_PH_length(surface_node,centerline_nodes[0],centerline_nodes[1])
-                    countor[0] += 1
-                elif surface_node.closest_centerlinenode_id==len(centerline_nodes)-1:
-                    radius_list[len(centerline_nodes)] += utility.calculate_PH_length(surface_node,centerline_nodes[-2],centerline_nodes[-1])
-                    countor[len(centerline_nodes)] += 1
-                else:
-                    radius_list[surface_node.closest_centerlinenode_id]+=surface_node.closest_centerlinenode_distance
-                    countor[surface_node.closest_centerlinenode_id] += 1
-                    radius_list[surface_node.closest_centerlinenode_id+1]+=surface_node.closest_centerlinenode_distance
-                    countor[surface_node.closest_centerlinenode_id+1] += 1
+def radius_by_perp_section(stl_filepath, centerline_nodes, centerline_filename, inlet_outlet_info, output_dir):
+    mesh = pv.read(stl_filepath)  # PolyData
+    # 速度/安定性のための前処理（任意）
+    mesh = mesh.triangulate().clean(tolerance=1e-9)
+    radii = np.full(len(centerline_nodes)+1, np.nan, dtype=float)
+    for i in range(len(centerline_nodes)):
+        # PyVista slice -> vtkCutter 相当
+        slc = mesh.slice(normal=utility.unit(centerline_nodes[i].tangentvec), origin=utility.vec(centerline_nodes[i]))
+        line_vtk = slc  # pv.PolyData は vtkPolyData互換
 
-        for i in range(len(radius_list)):
-            if countor[i]!=0:
-                radius_list[i] /= countor[i]
-
-        radius_list_smooth[0]  = (radius_list[0]+radius_list[1])/2
-        radius_list_smooth[-1] = (radius_list[-1]+radius_list[-2])/2
-        for i in range(1,len(radius_list)-1):
-            radius_list_smooth[i] = (radius_list[i-1]+radius_list[i]+radius_list[i+1])/3
-
-        inlet_outlet_info.add_radius_info(radius_list_smooth[0], radius_list_smooth[-1])
-
-    finally:
-        if gmsh.isInitialized():
-            gmsh.finalize()
-
-    return radius_list_smooth
+        r = polyline_min_distance(utility.vec(centerline_nodes[i]), line_vtk)
+        if r is None:
+            # 断面が取れない（中心線点が形状外、平面が交差しない等）
+            radii[i] = np.nan
+        else:
+            radii[i] = r
+    radii[-1] = radii[-2]
+    radii=radii.tolist()
+    radii_smooth = []
+    for i in range(len(centerline_nodes)+1):
+        radii_smooth.append(0.0)
+    radii_smooth[0]  = (radii[0]+radii[1])/2
+    radii_smooth[-1] = (radii[-1]+radii[-2])/2
+    for i in range(1,len(radii)-1):
+        radii_smooth[i] = (radii[i-1]+radii[i]+radii[i+1])/3
+    inlet_outlet_info.add_radius_info(radii_smooth[0], radii_smooth[-1])
+    myio.write_csv_radius(radii_smooth, centerline_filename, output_dir)
+    return radii_smooth
 
 # generate background mesh
 def generate_pos_bgm(filepath, centerline_nodes,radius_list,filename, classify_parameter, config, output_dir):
@@ -106,7 +79,7 @@ def generate_pos_bgm(filepath, centerline_nodes,radius_list,filename, classify_p
         if not gmsh.isInitialized():
             gmsh.initialize()
         gmsh.merge(filepath)  
-        # ここのclassifySurface関数の1つ目の引数が 通常の感覚と逆なので注意。値が大きいほど、判定が厳しくなる。
+        # ここのclassifySurface関数の1つ目の引数が 通常の感覚と逆なので注意(?)。値が大きいほど、判定が厳しくなる(?)。
         # classify_parameter の値を小さく設定するほど、三角形パッチの法線同士の成す角が大きくても、連続する面とみなす。
         gmsh.model.mesh.classifySurfaces(angle = classify_parameter * np.pi / 180, boundary=True, forReparametrization=True)
         gmsh.model.mesh.createGeometry()
@@ -115,8 +88,8 @@ def generate_pos_bgm(filepath, centerline_nodes,radius_list,filename, classify_p
         gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
         gmsh.option.setNumber("Mesh.OptimizeThreshold", 0.9)
         gmsh.option.setNumber('Mesh.Algorithm', 1)
-        gmsh.option.setNumber("Mesh.MeshSizeMin", config.MESHSIZE)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", config.MESHSIZE)
+        gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5*min(radius_list))   # 一様なサイズのテトラでBGMを作る
+        gmsh.option.setNumber("Mesh.MeshSizeMax", 0.5*min(radius_list))   # そのサイズは断面積最小の断面で、最小直径方向に4~5個並ぶ程度のサイズ。
         wall = gmsh.model.getEntities(2)
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
         wall_id = [e[1] for e in wall]
@@ -217,14 +190,8 @@ def make_surfacemesh(stl_filepath, mesh, filename, output_dir):
 def map_surfacenode_to_centerlinenodes(surface_triangles, centerline_nodes):
     print("info_func    : start corresponding surface mesh triangles to centerline nodes") 
     for surface_triangle in surface_triangles:
-        # vtkファイルは、三角形の頂点の記述順が反時計回りになっており、法線ベクトルの向きは暗示的に示されている。
-        # gmsh は そのルールを守ってvtkを出力してくれるので、stlを読み込んで中心線情報も使いながら自分で法線ベクトルを計算するのではなく、
-        # gmsh で出力されたvtkの法線ベクトルを使う。(断面が円形でない扁平な形状などだと、中心線を使っても法線ベクトルが外を向かないことがある)
-        #
-        # ↑ STLも法線(facet normal)と整合するように頂点を記述する。どちらかというと、make_surfacemeshでvtkとして出力するのは、
-        # vtkは頂点をID管理するが、STLはしないため、頂点にIDを与えて重複排除する処理が面倒だったから。
-        surface_triangle.calc_centroid()                                  #
-        surface_triangle.find_closest_centerlinenode(centerline_nodes)    #
+        surface_triangle.calc_centroid()                                  
+        surface_triangle.find_closest_centerlinenode(centerline_nodes)    
         surface_triangle.assign_correspondcenterlinenode_to_surface_node()
     print("info_func    : finish corresponding surface nodes to centerline nodes")
 
@@ -382,13 +349,27 @@ def naming_inlet_outlet(mesh,centerline_nodes,config):
     return mesh
 
 def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes,surface_nodes,surface_triangles,mesh,config, output_dir):
+    """
+    deform_surface の Docstring
+    
+    :param target_centerline_nodes: 
+    :param radius_list_target: if not None, 1. set as edgeradius, 2. deform surface_nodes to radius direction and it makes cross section true circle.
+    :param centerline_nodes: original centerline nodes
+    :param surface_nodes: 
+    :param surface_triangles: 説明
+    :param mesh: 説明
+    :param config: deform.config
+    :param output_dir: 
+    """
     print("start deforming surface mesh")
     for i in range(len(centerline_nodes)):
         centerline_nodes[i].calc_tangentvec(centerline_nodes)
         target_centerline_nodes[i].calc_tangentvec(target_centerline_nodes)
-        
-    utility.moving_average_for_tangentvec(centerline_nodes)
-    utility.moving_average_for_tangentvec(target_centerline_nodes)
+    
+    if config.MOVING_AVERAGE :
+        utility.moving_average_for_tangentvec(centerline_nodes)
+        utility.moving_average_for_tangentvec(target_centerline_nodes)
+
     for i in range(len(centerline_nodes)):
         target_centerline_nodes[i].calc_parallel_vec(centerline_nodes)
         target_centerline_nodes[i].calc_rotation_matrix(centerline_nodes)
@@ -402,7 +383,7 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
             surface_node_moved.x += correspond_centerlinenode.x # 複数のcorrespond_centerlinenode がある場合、起点が複数になる。
             surface_node_moved.y += correspond_centerlinenode.y
             surface_node_moved.z += correspond_centerlinenode.z
-            localvec = utility.vector(surface_node) - utility.vector(correspond_centerlinenode)
+            localvec = utility.vec(surface_node) - utility.vec(correspond_centerlinenode)
             movementvec = (target_centerline_nodes[correspond_centerlinenode.id].parallel_vec +
                                 target_centerline_nodes[correspond_centerlinenode.id].rotation_matrix @ localvec)
             surface_node_moved.x += movementvec[0]
@@ -416,7 +397,6 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
         surface_node_moved.find_closest_centerlinenode(target_centerline_nodes)
         if radius_list_target != None:
             surface_node_moved.find_projectable_centerlineedge(target_centerline_nodes)
-            surface_node_moved.set_edgeradius(radius_list_target,config)
             surface_node_moved.execute_deform_radius(radius_list_target,target_centerline_nodes)
 
         mesh.nodes.append(surface_node_moved)
@@ -425,7 +405,7 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
         surface_nodes_moved.append(surface_node_moved)
 
     moved_surface_triangles=[]
-    moved_surface_triangle_dict = {}   ### edgeswapのための変数を追加
+    moved_surface_triangle_dict = {}   # edgeswapのための変数を追加
     
     for surface_triangle in surface_triangles:
         node0 = moved_nodes_dict[surface_triangle.node0.id]
@@ -459,8 +439,7 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
 
     deformed_surface_filepath = myio.write_stl_surfacetriangles(moved_surface_triangles,"deformed_surface.stl", output_dir)
     print("finished deforming surface mesh. output deformed_surface.stl")
-    # myio.write_vtk_surfacemesh_with_ccnID(surface_nodes_moved,moved_surface_triangles)
-    # print("output deformed_surface_with_ccnID.vtk")
+    myio.write_vtk_surfacemesh_with_ccnID(surface_nodes_moved,moved_surface_triangles, "deformed", output_dir)
     return deformed_surface_filepath,moved_nodes_dict,moved_surface_triangles,mesh
 
 def GUI_setting():

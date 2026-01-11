@@ -9,13 +9,12 @@ description = "Meshing and deformation tools for CFD batch pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "gmsh==4.15.0",
-  "matplotlib==3.10.7",
   "numpy==2.3.4",
-  "pandas==2.3.3",
   "scipy==1.16.3",
-  "trimesh==4.9.0",
+  "pandas==2.3.3",
   "vtk==9.5.2",
+  "pyvista==0.46.4",
+  "gmsh==4.15.0",
 ]
 
 [tool.setuptools]

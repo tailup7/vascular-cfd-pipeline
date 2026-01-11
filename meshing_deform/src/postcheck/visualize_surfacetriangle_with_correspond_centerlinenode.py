@@ -1,6 +1,6 @@
-from commonlib.func import map_surfacenode_to_centerlinenodes
-import commonlib.myio as myio
 from pathlib import Path
+import commonlib.myio as myio
+from commonlib.func import map_surfacenode_to_centerlinenodes
 
 # meshing実行時には func.make_surfacemesh()内の myio.read_vtk_surfacemesh()で "surfacemesh_original.vtk" から読み込んだ surface_triangles を受け取る 
 # deform実行時には、myio.read_msh_original_WALL()で "original_mesh.msh" から読み込んだ surface_triangles を受け取る

@@ -1,0 +1,34 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      omega;
+}
+dimensions      [0 0 -1 0 0 0 0];
+internalField   uniform 1;
+
+boundaryField
+{
+    INLET
+    {
+        type            turbulentMixingLengthFrequencyInlet;
+        mixingLength    0.0011;     // 代表長さ, 管直径Dの5~10%程度
+        value           uniform 1;
+    }
+    OUTLET
+    {
+        type            zeroGradient;
+    }
+    WALL
+    {
+        type            omegaWallFunction;       //y+ ~ 1 のときは、type  fixedValue;にしてもよい。
+        value           uniform 1;              // type  fixedValue; にした場合は、理論式 : omega_wall = 6·nu / (β1·y²) から求まる値を入れる。 y は第一セル中心(プリズム層 1 層目厚さ y_min の 1/2)。
+                                                // β1はk–ω 乱流モデルに含まれるモデル定数で, 0.075.
+    }                                           // 今は nu = 10(-6) (水) , 
+    defaultFaces                                // でも結局 type            omegaWallFunction; の方が安定する...(?)
+    {
+        type            empty; // 2Dなら
+    }
+}

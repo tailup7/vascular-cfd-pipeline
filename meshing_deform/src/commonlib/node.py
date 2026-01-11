@@ -1,6 +1,6 @@
-import commonlib.utility as utility
-import numpy as np
 import sys
+import numpy as np
+import commonlib.utility as utility
 
 class CenterlineNode:
     def __init__(self,id,x,y,z):
@@ -37,28 +37,9 @@ class CenterlineNode:
 
     # a から b への回転行列 ( b = R a ) 
     def calc_rotation_matrix(self,centerline_nodes): # 引数はもう一方の中心線
-        identity_matrix=np.array([[1,0,0],[0,1,0],[0,0,1]])
         a=centerline_nodes[self.id].tangentvec
         b=self.tangentvec
         R = utility.rotation_matrix_from_A_to_B(a,b)
-        #cross_product = np.cross(a,b)
-        #norm = np.linalg.norm(cross_product)
-        #if norm!=0:
-        #    unit_crossvec = cross_product/norm
-        #else:
-        #    unit_crossvec = cross_product
-#
-        #crx = float(unit_crossvec[0])
-        #cry = float(unit_crossvec[1])
-        #crz = float(unit_crossvec[2])
-#
-        #matrix1=np.array([[0, -crz, cry], [crz, 0, -crx], [-cry, crx, 0]])
-        #matrix2=np.array([[crx**2, crx*cry, crx*crz],[crx*cry, cry**2, cry*crz], [crx*crz, cry*crz, crz**2]])
-#
-        #cos_theta = np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b))
-        #cos_theta = np.clip(cos_theta, -1.0, 1.0) # 丸め誤差で-1~1に収まらない場合を防ぐ
-        #theta = np.arccos(cos_theta)
-
         self.rotation_matrix = R
 
     def calc_curvature(self, centerline_nodes):
@@ -174,18 +155,18 @@ class NodeAny:
             self.edgeradius = radius_list[self.projectable_centerlineedge_id+1]
         else:
             if self.closest_centerlinenode_id   == 0:
-                self.edgeradius=(radius_list[0]+radius_list[1])/2    # なんで足して2でわる？
+                self.edgeradius=(radius_list[0]+radius_list[1])/2    
             elif self.closest_centerlinenode_id == len(radius_list)-2: # 一番最後の中心線node
-                self.edgeradius=(radius_list[-1]+radius_list[-2])/2  # なんで足して2でわる？
+                self.edgeradius=(radius_list[-1]+radius_list[-2])/2  
             else:
-                self.edgeradius=(radius_list[self.closest_centerlinenode_id]+radius_list[self.closest_centerlinenode_id+1])/2   # なんで足して2で割る?
-        self.scalar_forbgm = self.edgeradius*config.SCALING_FACTOR
-        self.scalar_forlayer = self.edgeradius*2
+                self.edgeradius=(radius_list[self.closest_centerlinenode_id]+radius_list[self.closest_centerlinenode_id+1])/2   
+        self.scalar_forbgm = self.edgeradius*config.RADIAL_RESOLUTION_FACTOR
+        self.scalar_forlayer = self.edgeradius*2 # 断面と等価な面積を持つ真円の直径
 
 class NodeMoved(NodeAny):
     def execute_deform_radius(self,radius_list_target,centerline_nodes):
         if self.projectable_centerlineedge_id != None:
-            radius_direction_vec = utility.vector(self)-self.projectable_H_vec
+            radius_direction_vec = utility.vec(self)-self.projectable_H_vec
             radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
             coef = radius_list_target[self.projectable_centerlineedge_id+1] - self.projectable_centerlineedge_distance
             deform_vector = coef*radius_direction_unitvec
@@ -194,7 +175,7 @@ class NodeMoved(NodeAny):
             self.z += deform_vector[2]
         else:
             if self.closest_centerlinenode_id==0:
-                radius_direction_vec = utility.vector(self)-utility.calculate_H(self,centerline_nodes[0],centerline_nodes[1])
+                radius_direction_vec = utility.vec(self)-utility.calculate_H(self,centerline_nodes[0],centerline_nodes[1])
                 radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
                 coef = radius_list_target[0] - np.linalg.norm(radius_direction_vec)
                 deform_vector = coef*radius_direction_unitvec
@@ -202,7 +183,7 @@ class NodeMoved(NodeAny):
                 self.y += deform_vector[1]
                 self.z += deform_vector[2]
             elif self.closest_centerlinenode_id==len(centerline_nodes)-1:
-                radius_direction_vec = utility.vector(self)-utility.calculate_H(self,centerline_nodes[-2],centerline_nodes[-1])
+                radius_direction_vec = utility.vec(self)-utility.calculate_H(self,centerline_nodes[-2],centerline_nodes[-1])
                 radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
                 coef = radius_list_target[-1] - np.linalg.norm(radius_direction_vec)
                 deform_vector = coef*radius_direction_unitvec
@@ -210,7 +191,7 @@ class NodeMoved(NodeAny):
                 self.y += deform_vector[1]
                 self.z += deform_vector[2]
             else:
-                radius_direction_vec = utility.vector(self) - utility.vector(centerline_nodes[self.closest_centerlinenode_id])
+                radius_direction_vec = utility.vec(self) - utility.vec(centerline_nodes[self.closest_centerlinenode_id])
                 radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
                 coef = (radius_list_target[self.closest_centerlinenode_id] + radius_list_target[self.closest_centerlinenode_id+1])/2 - np.linalg.norm(radius_direction_vec)
                 deform_vector = coef*radius_direction_unitvec
