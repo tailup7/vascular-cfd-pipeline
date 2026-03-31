@@ -19,9 +19,18 @@ The core functionality of this repository is implemented in `meshing_deform`, wh
 &nbsp;&nbsp;&nbsp; The entire pipeline can be executed in batch for multiple datasets ([batch](batch/)).
 
 ## Requirements
+### Full functionality
 + Linux
 + Python3.11 or Python3.12
 + OpenFOAM
+
+or
+
+### Partial functionality
++ Windows10 or later
++ Python3.11 or Python3.12
+
+※ OpenFOAM-dependent features are not available on Windows.
 
 ## Getting Started
 ### Getting Started on Local Machine (Linux)
@@ -30,21 +39,22 @@ The core functionality of this repository is implemented in `meshing_deform`, wh
    git clone <repository-url>
    cd vascular-cfd-pipeline
    ```
-2. Rename inputs folder
-   ``` bash
-   mv inputs_share inputs
-   ``` 
-3. Install dependencies for `meshing_deform`
+
+2. Create and activate a virtual environment
    ``` bash
    # make python virtual environment
    python3 -m venv venv
    
    # activate the virtual environment
    source venv/bin/activate
-
+   ```
+      
+3. Install dependencies for `meshing_deform`
+   ``` bash
    # install dependencies
    pip install -e meshing_deform
    ```
+   
 4. Run modules
    ``` bash
    python -m meshing.main
@@ -52,14 +62,56 @@ The core functionality of this repository is implemented in `meshing_deform`, wh
    python -m deform.main
    ```
 
-**(Optional) Run batch pipeline for multiple cases**
+**(Optional) Run batch pipeline for multiple cases, including CFD simulation useing OpenFOAM**
 ``` bash
 cd batch
 python batch_auto.py
 ```
 
+### Getting Started on Local Machine (Windows)
+1. Clone the repository
+   ``` bash
+   git clone <repository-url>
+   cd vascular-cfd-pipeline
+   ```
+
+2. Create and activate a virtual environment
+   ``` bash
+   # make python virtual environment
+   python -m venv venv
+   
+   # activate (PowerShell)
+   venv\Scripts\Activate.ps1
+   # or
+   # activate (Command Prompt)
+   venv\Scripts\activate
+   ```
+      
+3. Install dependencies for `meshing_deform`
+   ``` bash
+   # install dependencies
+   pip install -e meshing_deform
+   ```
+   
+4. Run modules
+   ``` bash
+   python -m meshing.main
+   # or
+   python -m deform.main
+   ```
+   
 ### Getting Started on Fugaku
-See the documentation [here](docs/fugaku) .
+See the documentation [here](docs/fugaku/environment) .
+
+## Meshing Parameter
+Mesh generation and deformation are controlled by a set of parameters defined in configuration files.
+<br>
+For details, see:
++ [meshing_deform/src/meshing/config.py](meshing_deform/src/meshing)
++ [meshing_deform/src/deform/config.py](meshing_deform/src/deform)
+
+## Input Files
+`meshing_deform` expects centerline and surface in specific geometry and data formats as input data. Details are described in [here](docs)
 
 ## Project Structure
 ``` bash
@@ -75,7 +127,9 @@ See the documentation [here](docs/fugaku) .
   ├─ TubeFromCenterline/   # generate surface(*.stl) from centerline(*.csv) 
   ├─ openfoam_cases/       # template cases
   │     ├─ simpleFoam/
-  │     └─ pimpleFoam/
+  │     ├─ pimpleFoam/
+  │     ├─
+  │     └─
   ├─ batch/
   │     └─ batch_auto.py   # run batch process
   ├─ inputs/               # input data 
@@ -87,15 +141,24 @@ See the documentation [here](docs/fugaku) .
   │     ...
   ├─ jobs/
   │     └─ fugaku/
+  │          └─ batch_auto.py  # job script to run batch process on Fugaku 
   └─ docs/
         ├─ figures/
         └─ fugaku/
-                ├─ build_gmsh.sh
-                ├─ run_python_gmsh.sh
-                ├─ pyproject.toml
-                └─ README.md
+             ├─ OpenFOAM /
+             └─ environment /
+                  ├─ build_OpenFOAM_on_Fugaku
+                  ├─ build_gmsh.sh
+                  ├─ run_python_gmsh.sh
+                  ├─ pyproject.toml
+                  └─ README.md
 
 ```
+
+
+
+
+
 
 
 

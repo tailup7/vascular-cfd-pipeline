@@ -101,6 +101,7 @@ class NodeAny:
         self.closest_centerlinenode_id           = None
         self.closest_centerlinenode_distance     = None
         self.projectable_centerlineedge_id       = None
+        self.projectable_H_vec                   = None
         self.projectable_centerlineedge_distance = None
         self.edgeradius      = None
         self.scalar_forbgm   = None
@@ -161,10 +162,10 @@ class NodeAny:
             else:
                 self.edgeradius=(radius_list[self.closest_centerlinenode_id]+radius_list[self.closest_centerlinenode_id+1])/2   
         self.scalar_forbgm = self.edgeradius*config.RADIAL_RESOLUTION_FACTOR
-        self.scalar_forlayer = self.edgeradius*2 # 断面と等価な面積を持つ真円の直径
+        self.scalar_forlayer = self.edgeradius*2 # 断面の最小直径
 
 class NodeMoved(NodeAny):
-    def execute_deform_radius(self,radius_list_target,centerline_nodes):
+    def execute_deform_radius_true_circle(self,radius_list_target,centerline_nodes):
         if self.projectable_centerlineedge_id != None:
             radius_direction_vec = utility.vec(self)-self.projectable_H_vec
             radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
@@ -199,14 +200,33 @@ class NodeMoved(NodeAny):
                 self.y += deform_vector[1]
                 self.z += deform_vector[2]
 
-class NodeForHausdorff(NodeAny):
-    def __init__(self,id,x,y,z):
-        super().__init__(id,x,y,z)
-        self.closest_surface_node_id=None
-        self.related_triangle_ids=[]
+    def execute_deform_radius_expansion(self, distance_from_original_centerline, expansion_list, centerline_nodes):
+        if self.projectable_centerlineedge_id != None:
+            initial_point = self.projectable_H_vec
+            radius_direction_vec = utility.vec(self)-self.projectable_H_vec
+            radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
+            deformed_point = initial_point + distance_from_original_centerline * expansion_list[self.projectable_centerlineedge_id+1] * radius_direction_unitvec
+        else:
+            if self.closest_centerlinenode_id==0:
+                initial_point = utility.calculate_H(self,centerline_nodes[0],centerline_nodes[1])
+                radius_direction_vec = utility.vec(self)-utility.calculate_H(self,centerline_nodes[0],centerline_nodes[1])
+                radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
+                deformed_point = initial_point + distance_from_original_centerline * expansion_list[0] * radius_direction_unitvec
+            elif self.closest_centerlinenode_id==len(centerline_nodes)-1:
+                initial_point = utility.calculate_H(self,centerline_nodes[-2],centerline_nodes[-1])
+                radius_direction_vec = utility.vec(self)-utility.calculate_H(self,centerline_nodes[-2],centerline_nodes[-1])
+                radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
+                deformed_point = initial_point + distance_from_original_centerline * expansion_list[-1] * radius_direction_unitvec
+            else:
+                initial_point = utility.vec(centerline_nodes[self.closest_centerlinenode_id])
+                radius_direction_vec = utility.vec(self) - utility.vec(centerline_nodes[self.closest_centerlinenode_id])
+                radius_direction_unitvec = radius_direction_vec/np.linalg.norm(radius_direction_vec)
+                deformed_point = initial_point + distance_from_original_centerline * ((expansion_list[self.closest_centerlinenode_id]+expansion_list[self.closest_centerlinenode_id+1])/2) * radius_direction_unitvec
+        self.x = deformed_point[0]
+        self.y = deformed_point[1]
+        self.z = deformed_point[2]
 
-    def append(self,id):
-        self.related_triangle_ids.append(id)
+
 
 # gmsh.model.mesh.getNodes() の1つめの返り値は、得られた全Nodeのid のリスト。
 # 2つめの返り値は、得られる全Nodeのx,y,z座標成分をまとめたリスト。これらをnodeごとの情報に整理する

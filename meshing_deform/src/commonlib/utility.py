@@ -89,54 +89,6 @@ def find_right_neighbors(points,innerpoint_vec):
         point_temp=point_temp_next
         min_distance=float("inf")
 
-def calc_point_to_triangle_distance(P, A, B, C):
-    """
-    点 P と三角形 ABC の最短距離を計算
-    """
-    # 辺ベクトル
-    AB = vec(B) - vec(A)
-    AC = vec(C) - vec(A)
-    AP = vec(P) - vec(A)
-
-    # 各種スカラー積
-    d1 = np.dot(AB, AP)
-    d2 = np.dot(AC, AP)
-    d3 = np.dot(AB, AB)
-    d4 = np.dot(AB, AC)
-    d5 = np.dot(AC, AC)
-
-    denom = d3 * d5 - d4 * d4
-
-    # 重心座標(u,v)を計算
-    if denom == 0:
-        return np.linalg.norm(AP)  # 三角形が退化してる（点）
-    
-    v = (d5 * d1 - d4 * d2) / denom
-    w = (d3 * d2 - d4 * d1) / denom
-    u = 1 - v - w
-
-    # 三角形内部にあるか？
-    if u >= 0 and v >= 0 and w >= 0:
-        # 三角形の面への垂直距離
-        N = np.cross(AB, AC)
-        N = N / np.linalg.norm(N)
-        dist = abs(np.dot(AP, N))
-    else:
-        # 外側 → 各辺との距離 or 頂点との距離の最小値
-        def segment_distance(P, Q, R):
-            t = np.dot(vec(P) - vec(Q), vec(R) - vec(Q)) / np.dot(vec(R) - vec(Q), vec(R) - vec(Q))
-            t = np.clip(t, 0, 1)
-            projection = vec(Q) + t * (vec(R) - vec(Q))
-            return np.linalg.norm(vec(P) - projection)
-
-        dist = min(
-            segment_distance(P, A, B),
-            segment_distance(P, B, C),
-            segment_distance(P, C, A)
-        )
-    return dist
-
-
 def skew(v):
     """ベクトルvの歪対称行列 [v]_x"""
     vx, vy, vz = v

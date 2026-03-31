@@ -29,3 +29,6 @@
 chmod +x simpleParallel.sh
 ./simpleParallel
 ```
+
+# 注意点
+並列実行を行うときは`simpleParallel.sh`中で設定した並列数と、`system/decomposeParDict`内で設定する`numberOfSubdomains`の値を揃えること

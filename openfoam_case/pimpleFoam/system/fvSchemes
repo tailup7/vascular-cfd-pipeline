@@ -1,0 +1,72 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+ddtSchemes
+{
+    default         Euler;              // まずは陽的Eulerで安定寄り
+}
+
+gradSchemes
+{
+    // 非直交対応のため、cellLimited で安全側に
+    default         cellLimited Gauss linear 1;
+    grad(U)         cellLimited Gauss linear 1;
+}
+
+divSchemes
+{
+    default                                 none;
+
+    // 速度の対流は堅牢な limitedLinear（ベクトル版）を使用
+    div(phi,U)                              Gauss limitedLinearV 1;
+
+    // 乱流量などスカラは upwind で初期安定化
+    div(phi,k)                              Gauss upwind;
+    div(phi,epsilon)                        Gauss upwind;
+    div(phi,omega)                          Gauss upwind;
+    div(phi,R)                              Gauss upwind;
+    div(phi,nuTilda)                        Gauss upwind;
+
+    // 粘性（対称速度勾配テンソル）は線形でOK
+    div((nuEff*dev2(T(grad(U)))))           Gauss linear;
+}
+
+laplacianSchemes
+{
+    // 非直交補正あり（corrected）に変更
+    default         Gauss linear corrected;
+}
+
+interpolationSchemes
+{
+    default         linear;
+}
+
+snGradSchemes
+{
+    // 非直交に強い corrected を使用
+    default         corrected;
+}
+
+// p の flux 計算を明示（OpenFOAM Plus 系の慣習）
+fluxRequired
+{
+    default         no;
+    p               yes;
+}
+
+// ************************************************************************* //

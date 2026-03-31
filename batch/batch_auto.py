@@ -1,10 +1,12 @@
 from __future__ import annotations
-
+import logging
 from pathlib import Path
+import time
 import sys
 import os
 import subprocess
 import shutil
+from commonlib import time_logging
 
 # --------------------
 # project paths
@@ -33,14 +35,16 @@ def list_files_exactly_one(dirpath: Path, pattern: str) -> Path:
         )
     return files[0].resolve()
 
-def run_simple_parallel(case_dir: Path, *, np: int = 8):
+def run_simple_parallel(case_dir: Path, *, np: int ):
     case_dir = case_dir.resolve()
     sh = case_dir / "simpleParallel.sh"
     if not sh.is_file():
         raise FileNotFoundError(f"simpleParallel.sh not found: {sh}")
     sh.chmod(sh.stat().st_mode | 0o111)
+    # 富岳で使うときはこのbatch_auto.pyを呼び出す親のrun_batch.sh内で並列数NPをexportしておき、simpleParallel.shで読み込むようにする 
     if os.environ.get("FUGAKU"):
-        cmd = f"cd '{case_dir}' && NP={np} ./{sh.name}"
+        cmd = f"cd '{case_dir}' && ./{sh.name}"
+        # ローカルで使うときはこのbatch_auto.pyが起動用のスクリプトになるので、このファイル内でNPを定義してsimpleParallel.shに渡す
     else:
         cmd = (
             "source /usr/lib/openfoam/openfoam2506/etc/bashrc && "
@@ -51,7 +55,7 @@ def run_simple_parallel(case_dir: Path, *, np: int = 8):
         raise RuntimeError(f"simpleParallel.sh failed (code={res.returncode}) in {case_dir}")
 
 
-def ensure_original_mesh(original_dir: Path) -> Path:
+def ensure_original_mesh(original_dir: Path, np:int) -> Path:
     """
     inputs/original に *.msh があればそれを使う。
     無ければ inputs/original の *.csv と *.stl を使って run_meshing し、
@@ -84,10 +88,21 @@ def ensure_original_mesh(original_dir: Path) -> Path:
         interactive=False,
     )
 
+    # setting for logfile
+    DATA_DIR = output_dir.parent
+    timelog_filepath = DATA_DIR / "time.log"
+    logger  = time_logging.setup_logger(timelog_filepath)
+
     generated_mesh = (output_dir / "original_mesh.msh").resolve()
     if not generated_mesh.is_file():
         raise FileNotFoundError(f"[batch] meshing output not found: {generated_mesh}")
+    # OpenFOAMのcheckMeshをする
+    logger.info("=== OpenFOAM checkMesh started ===")
+    start = time.perf_counter()
     check = run_checkmesh(str(generated_mesh))
+    end = time.perf_counter()
+    logger.info(f"checkMesh : {end - start:.3f} sec")
+    logger.info("=== OpenFOAM checkMesh finished ===")
     # inputs/original へコピー（ファイル名はそのままにする）
     copied_mesh = (original_dir / generated_mesh.name).resolve()
     shutil.copy2(generated_mesh, copied_mesh)
@@ -96,14 +111,19 @@ def ensure_original_mesh(original_dir: Path) -> Path:
     log_path = (PROJECT_ROOT / "runs" / "log.txt").resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as f:
-        f.write(f"m-{centerline_filepath.stem} {check["status"]}\n")
+        f.write(f"m-{centerline_filepath.stem} {check['status']}\n")
     # checkMesh OK なら solverを実行
-    # if check["ok"]:
-    #     run_simple_parallel(Path(check["case_dir"]),np=8)
+    if check["ok"]:
+        logger.info("=== execute simpleFoam ===")
+        start = time.perf_counter()
+        run_simple_parallel(Path(check["case_dir"]),np=np)
+        end = time.perf_counter()
+        logger.info(f"simpleFoam : {end - start:.3f} sec")
+        logger.info("=== finished simpleFoam ===")
     return copied_mesh
 
 
-def run_deform_all(original_dir: Path, target_dir: Path):
+def run_deform_all(original_dir: Path, target_dir: Path, np: int):
     """
     inputs/target の *.csv を順番に target_centerline として deform する。
     centerline_filepath と mesh は inputs/original のものを使う。
@@ -116,7 +136,7 @@ def run_deform_all(original_dir: Path, target_dir: Path):
     centerline_filepath = list_files_exactly_one(original_dir, "*.csv")
 
     # original 側：mesh は ensure_original_mesh で「必ず1つ」用意される
-    mesh_filepath = ensure_original_mesh(original_dir)
+    mesh_filepath = ensure_original_mesh(original_dir, np)
 
     # target 側：複数 csv を順番に処理
     target_csvs = sorted([p for p in target_dir.glob("*.csv") if p.is_file()])
@@ -144,19 +164,33 @@ def run_deform_all(original_dir: Path, target_dir: Path):
                 original_mesh_filepath=str(mesh_filepath),
                 interactive=False,
             )
+            DATA_DIR = output_dir.parent
+            timelog_filepath = DATA_DIR / "time.log"
+            logger  = time_logging.setup_logger(timelog_filepath)
 
             deformed_mesh = (output_dir / "deformed_mesh.msh").resolve()
             if not deformed_mesh.is_file():
                 raise FileNotFoundError(f"[batch] deformed mesh not found: {deformed_mesh}")
 
+            # OpenFOAMのcheckMeshをする
+            logger.info("=== OpenFOAM checkMesh started ===")
+            start = time.perf_counter()
             check = run_checkmesh(str(deformed_mesh))
+            end = time.perf_counter()
+            logger.info(f"checkMesh : {end - start:.3f} sec")
+            logger.info("=== OpenFOAM checkMesh finished ===")
 
             with log_path.open("a", encoding="utf-8") as f:
-                f.write(f"d-{target_centerline_filepath.stem} {check["status"]}\n")
+                f.write(f"d-{target_centerline_filepath.stem} {check['status']}\n")
 
             # checkMesh OK なら solverを実行
-            # if check["ok"]:
-            #     run_simple_parallel(Path(check["case_dir"]),np=8)
+            if check["ok"]:
+                logger.info("=== execute simpleFoam ===")
+                start = time.perf_counter()
+                run_simple_parallel(Path(check["case_dir"]),np=np)
+                end = time.perf_counter()
+                logger.info(f"simpleFoam : {end - start:.3f} sec")
+                logger.info("=== finished simpleFoam ===")
 
         except Exception as e:
             print(f"[ERROR] target={target_centerline_filepath.name} : {e}", file=sys.stderr)
@@ -178,7 +212,12 @@ def main():
         print(f"[batch] target dir not found: {target_dir}", file=sys.stderr)
         sys.exit(1)
 
-    run_deform_all(original_dir, target_dir)
+    if os.environ.get("FUGAKU"):
+        np = int(os.environ["NP"])
+    else:
+        np = 4   # 自分で設定する 
+
+    run_deform_all(original_dir, target_dir, np)
 
 
 if __name__ == "__main__":

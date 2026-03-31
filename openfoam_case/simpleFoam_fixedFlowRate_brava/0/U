@@ -1,0 +1,43 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2506                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    arch        "LSB;label=32;scalar=64";
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    WALL
+    {
+        type            noSlip;
+    }
+    OUTLET
+    {
+        type            zeroGradient;
+    }
+    INLET
+    {
+        type                flowRateInletVelocity;    
+        volumetricFlowRate  constant 3.318e-6;   // Re400 // 流量Q [m3/s] // Q = Re*nu*pi*D/4 (D:diameter) // Re...断面平均速度ベースのRe数
+        // 流入面が非円断面であれば水力直径 D_h = 4A / P (A:断面積, P: 断面の周長) を用いて、 Q = Re*nu*A/D_h (あるいはRe*nu*P/4) によってQを決める
+        value               uniform (0 0 0);     // dummy
+    }
+}
+
+
+// ************************************************************************* //

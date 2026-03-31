@@ -1,4 +1,6 @@
 import sys
+import logging
+import time
 import gmsh
 import pyvista as pv
 import numpy as np
@@ -139,7 +141,7 @@ def generate_pos_bgm(filepath, centerline_nodes,radius_list,filename, classify_p
         if gmsh.isInitialized():
             gmsh.finalize()
 
-def make_surfacemesh(stl_filepath, mesh, filename, output_dir):  
+def make_surfacemesh(stl_filepath, mesh, filename, config, output_dir):  
     try:
         if not gmsh.isInitialized():
             gmsh.initialize()
@@ -170,7 +172,29 @@ def make_surfacemesh(stl_filepath, mesh, filename, output_dir):
         gmsh.write(output_stl_filepath)
         print(f"output surfacemesh_{filename}.vtk")
         print(f"output surfacemesh_{filename}.stl")
-        surface_nodes,surface_triangles = myio.read_vtk_surfacemesh(output_vtk_filepath)    
+        surface_nodes,surface_triangles = myio.read_vtk_surfacemesh(output_vtk_filepath) 
+        if config.EDGESWAP:
+            nodes_dict={}
+            surface_triangle_dict={}
+            for surface_triangle in surface_triangles:
+                nodes_dict[surface_triangle.node0.id] = surface_triangle.node0
+                nodes_dict[surface_triangle.node1.id] = surface_triangle.node1
+                nodes_dict[surface_triangle.node2.id] = surface_triangle.node2
+                surface_triangle.calc_unitnormal()
+                surface_triangle_dict[surface_triangle.id] = surface_triangle
+            edgeswap_count = 0
+            edgeswap_count_pre = None
+            while edgeswap_count_pre != edgeswap_count : 
+                surface_triangles, edgeswap_count, edgeswap_count_pre = edgeswap.edgeswap(
+                                                                            surface_triangles, 
+                                                                            surface_triangle_dict, 
+                                                                            nodes_dict,
+                                                                            edgeswap_count,
+                                                                            edgeswap_count_pre)
+
+        if config.SMOOTHER_VTK:
+            surface_nodes,surface_triangles = smoother_vtk.vtkWindowedSincPolyDataFilter(surface_nodes, surface_triangles)
+            smoothed_surface_filepath = myio.write_stl_surfacetriangles(surface_triangles,f"surfacemesh_{filename}_vtksmoothed.stl", output_dir)
         for surface_node in surface_nodes:
             mesh.nodes.append(surface_node)
             mesh.num_of_nodes += 1
@@ -212,7 +236,7 @@ def make_tetramesh(layernode_dict, mesh, inlet_outlet_info, filename,config, out
             gmsh.initialize()
         gmsh.merge(stl_filepath_mostinner)
 
-        gmsh.model.mesh.createTopology() # 境界面上のNodeに接続する形でメッシュを作るという制約
+        gmsh.model.mesh.createTopology() # 重要 : 境界面上のNodeに接続する形でメッシュを作るという制約
 
         innerwall = gmsh.model.getEntities(2)
         gmsh.model.geo.synchronize()
@@ -245,7 +269,11 @@ def make_tetramesh(layernode_dict, mesh, inlet_outlet_info, filename,config, out
         gmsh.option.setNumber("Mesh.OptimizeThreshold", 0.9)
         gmsh.option.setNumber('Mesh.Algorithm', 1)
         gmsh.option.setNumber("Mesh.Optimize", 10)
-        gmsh.merge(str(output_dir / f'bgm_{filename}.pos'))           
+        if config.RESCALE_BGFIELD_FOR_TETRA:                                      # config=deform_configの場合をまだ想定していない
+            filepath_pos_bgm_for_tetra = myio.rewrite_pos_bgm_for_tetra(filename, config, output_dir)     
+            gmsh.merge(str(filepath_pos_bgm_for_tetra))
+        else:
+            gmsh.merge(str(output_dir / f'bgm_{filename}.pos'))      ## ここまでまだ適当
         bg_field = gmsh.model.mesh.field.add("PostView")    
         gmsh.model.mesh.field.setNumber(bg_field, "ViewIndex", 0) 
         gmsh.model.mesh.field.setAsBackgroundMesh(bg_field) 
@@ -331,7 +359,6 @@ def make_tetramesh(layernode_dict, mesh, inlet_outlet_info, filename,config, out
     finally:
         if gmsh.isInitialized():
             gmsh.finalize()
-    return mesh
 
 def naming_inlet_outlet(mesh,centerline_nodes,config):
     nodes_on_inletboundaryedge=[]
@@ -346,14 +373,14 @@ def naming_inlet_outlet(mesh,centerline_nodes,config):
     for i in range(1,config.NUM_OF_LAYERS+1):
         mesh = boundarylayer.make_nthlayer_quad(i,centerline_nodes, nodes_on_inletboundaryedge, nodes_on_outletboundaryedge,mesh,config)
     print("naming INLET OUTLET to quadrangles on surface.")
-    return mesh
 
-def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes,surface_nodes,surface_triangles,mesh,config, output_dir):
+def deform_surface(target_centerline_nodes, radius_list_target, expansion_list, centerline_nodes,surface_nodes,surface_triangles,mesh,config, output_dir):
     """
     deform_surface の Docstring
-    
+
     :param target_centerline_nodes: 
     :param radius_list_target: if not None, 1. set as edgeradius, 2. deform surface_nodes to radius direction and it makes cross section true circle.
+    :param expansion_list:
     :param centerline_nodes: original centerline nodes
     :param surface_nodes: 
     :param surface_triangles: 説明
@@ -361,6 +388,8 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
     :param config: deform.config
     :param output_dir: 
     """
+    logger = logging.getLogger("time")
+    start = time.perf_counter()
     print("start deforming surface mesh")
     for i in range(len(centerline_nodes)):
         centerline_nodes[i].calc_tangentvec(centerline_nodes)
@@ -395,14 +424,31 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
         surface_node_moved.z = surface_node_moved.z/countor
 
         surface_node_moved.find_closest_centerlinenode(target_centerline_nodes)
+
+        # 目標中心線に"radius"カラムがある場合 : 半径方向に移動する処理 (真円になる)
         if radius_list_target != None:
             surface_node_moved.find_projectable_centerlineedge(target_centerline_nodes)
-            surface_node_moved.execute_deform_radius(radius_list_target,target_centerline_nodes)
+            surface_node_moved.execute_deform_radius_true_circle(radius_list_target,target_centerline_nodes)
+
+        # 目標中心線に"expansion"カラムがある場合 : 元の断面形状を保ったまま半径方向に拡張(縮小)する処理
+        if expansion_list != None:
+            surface_node_moved.find_projectable_centerlineedge(target_centerline_nodes)
+            surface_node.find_closest_centerlinenode(centerline_nodes)
+            surface_node.find_projectable_centerlineedge(centerline_nodes)
+            if surface_node.projectable_centerlineedge_id != None:
+                distance_from_original_centerline = surface_node.projectable_centerlineedge_distance
+            else:
+                distance_from_original_centerline = surface_node.closest_centerlinenode_distance
+            surface_node_moved.execute_deform_radius_expansion(distance_from_original_centerline, expansion_list,target_centerline_nodes) 
+
 
         mesh.nodes.append(surface_node_moved)
         mesh.num_of_nodes += 1
         moved_nodes_dict[surface_node.id]=surface_node_moved
         surface_nodes_moved.append(surface_node_moved)
+
+    end = time.perf_counter()
+    logger.info(f"deform surface nodes: {end - start:.3f} sec")
 
     moved_surface_triangles=[]
     moved_surface_triangle_dict = {}   # edgeswapのための変数を追加
@@ -417,6 +463,7 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
         moved_surface_triangle.correspond_centerlinenode = surface_triangle.correspond_centerlinenode 
         moved_surface_triangles.append(moved_surface_triangle)
 
+    start = time.perf_counter()
     # edgeswap を実行
     if config.EDGESWAP :
         edgeswap_count     = 0
@@ -428,10 +475,15 @@ def deform_surface(target_centerline_nodes, radius_list_target, centerline_nodes
                                                                         moved_nodes_dict,
                                                                         edgeswap_count,
                                                                         edgeswap_count_pre)
+    end = time.perf_counter()
+    logger.info(f"edgeswap done: {end - start:.3f} sec")
 
+    start = time.perf_counter()
     # vtkWindowedSincPolyDataFilter を実行
     if config.SMOOTHER_VTK :
         surface_nodes_moved, moved_surface_triangles = smoother_vtk.vtkWindowedSincPolyDataFilter(surface_nodes_moved, moved_surface_triangles)
+    end = time.perf_counter()
+    logger.info(f"vtkWindowedSincPolyDataFilter done done: {end - start:.3f} sec")
     
     for moved_surface_triangle in moved_surface_triangles :   
         mesh.triangles_WALL.append(moved_surface_triangle)

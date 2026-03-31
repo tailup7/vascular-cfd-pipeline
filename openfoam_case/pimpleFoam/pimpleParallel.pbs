@@ -1,0 +1,90 @@
+#!/bin/bash
+#PBS -N pimpleParallel
+#PBS -q default
+#PBS -l nodes=1:ppn=36
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+
+# 単一ノードで並列計算する場合 : Open MPI 1.10 系
+export OMPI_MCA_btl="self,vader"
+
+NP=${PBS_NP:-1}
+APPLY_SCALE_MM=1        # ← Gmshメッシュを mm→m に直すなら 1
+RHO=1060                # Pa変換スクリプト用。[kg/m^3]（血液密度）
+
+# ----- mesh import -----
+MESH_FILE=$(ls *.msh 2>/dev/null | head -n 1)
+[ -n "${MESH_FILE}" ] || { echo "cannot find .msh file"; exit 1; }
+
+rm -rf processor* dynamicCode 2>/dev/null || true
+
+if grep -m1 -q '\$MeshFormat' "${MESH_FILE}"; then
+  gmshToFoam "${MESH_FILE}"
+  [ "${APPLY_SCALE_MM}" -eq 1 ] && transformPoints -scale "(1e-3 1e-3 1e-3)"
+else
+  fluentMeshToFoam "${MESH_FILE}"
+fi
+
+# ----- mesh check / small fixes -----
+checkMesh | tee checkMesh.log
+grep -q "Mesh OK" checkMesh.log || { echo "Mesh check failed"; exit 1; }
+
+# ----- constant/polyMesh/boundary の "WALL" の "type" を patch → wall に（これしないとWSSが計算されない。Gmshの場合だけだったかな?）--------
+if grep -A5 -n "^[[:space:]]*WALL[[:space:]]*$" constant/polyMesh/boundary | grep -q "type[[:space:]]*patch;"; then
+  sed -i '/^[[:space:]]*WALL[[:space:]]*$/,/^[[:space:]]*}[[:space:]]*$/ s/\(type[[:space:]]*\)patch;/\1wall;/' constant/polyMesh/boundary
+fi
+
+# ----- decomposeParDict sync -----
+mkdir -p system
+if [ -f system/decomposeParDict ]; then
+  if grep -q "^[[:space:]]*numberOfSubdomains[[:space:]]" system/decomposeParDict; then
+    sed -i "s/^[[:space:]]*numberOfSubdomains[[:space:]]\+[0-9]\+[[:space:]]*;/numberOfSubdomains ${NP};/" system/decomposeParDict
+  else
+    echo "numberOfSubdomains ${NP};" >> system/decomposeParDict
+  fi
+else
+  cat > system/decomposeParDict <<EOF
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      decomposeParDict;
+}
+numberOfSubdomains ${NP};
+method          scotch;
+distributed     no;
+roots           ();
+EOF
+fi
+
+# ----- decompose / distribute aux files / run -----
+decomposePar -force | tee log.decompose
+
+# ------  codedFixedValue が読むテーブルを各ランクへ ----------
+[ -f constant/input.data ] || { echo "FATAL: constant/input.data not found"; exit 1; }
+for d in processor*/constant; do ln -sf ../../constant/input.data "$d/input.data"; done
+
+mpirun -np "${NP}" pimpleFoam -parallel 2>&1 | tee log.parallel
+reconstructPar 2>&1 | tee log.reconstruct
+
+# ----- optional : convert p & wss to Pa for ALL time dirs -----
+if [ -f ./pa_convert.py ]; then
+  echo "=== Converting p & wallShearStress to Pa for ALL time dirs ==="
+  # 数値名の時刻ディレクトリを小さい順に
+  for t in $(ls -1d [0-9]* 2>/dev/null | grep -E '^[0-9]+(\.[0-9]+)?$' | sort -V); do
+    if [ -f "$t/p" ] || [ -f "$t/wallShearStress" ]; then
+      echo "--- time $t ---" | tee -a log.post
+      python ./pa_convert.py --rho "${RHO}" --time "$t" --fields p wallShearStress \
+        2>&1 | tee -a log.post
+    fi
+  done
+else
+  echo "WARNING: pa_convert.py not found" | tee -a log.post
+fi
+
+echo "DONE"

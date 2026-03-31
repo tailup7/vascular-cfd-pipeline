@@ -1,4 +1,5 @@
 import os
+import re
 import csv
 import shutil
 from pathlib import Path
@@ -62,25 +63,6 @@ def select_vtk():
     return filepath
 
 # 絶対パスの取得
-def select_surface():
-    import tkinter as tk
-    from tkinter import filedialog
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)  
-    filepath = filedialog.askopenfilename(
-        title="Select surface file",
-        filetypes=[
-            ("All supported files", "*.stl *.vtk"),
-            ("STL files", "*.stl"),
-            ("VTK files", "*.vtk")
-        ],
-        parent=root
-    )
-    root.destroy()
-    return filepath
-
-# 絶対パスの取得
 def select_msh():
     import tkinter as tk
     from tkinter import filedialog
@@ -115,9 +97,19 @@ def read_target_centerline(filepath):
         additional_radius = polynominal_func(len(radius_list))
         radius_list.append(additional_radius)
         inlet_outlet_info.add_radius_info(radius_list[0], radius_list[-1])
+        expansion_list = None
+    elif "expansion" in df.columns:
+        expansion_list = df["expansion"].tolist()
+        last_x = np.array([len(expansion_list)-3, len(expansion_list)-2, len(expansion_list)-1])
+        last_y = expansion_list[-3:]
+        polynominal_func = Polynomial.fit(last_x, last_y, 1)
+        additional_expansion = polynominal_func(len(expansion_list))
+        expansion_list.append(additional_expansion)
+        radius_list=None
     else:
-        radius_list = None
-    return centerline_nodes, radius_list, inlet_outlet_info
+        radius_list    = None
+        expansion_list = None
+    return centerline_nodes, radius_list, inlet_outlet_info, expansion_list
 
 def read_msh_tetra(filepath):
     tetra_list = []
@@ -161,6 +153,34 @@ def write_pos_bgm(tetra_list,nodeany_dict,filename, output_dir):
                     f"{{{s[0]:.2f},{s[1]:.2f},{s[2]:.2f},{s[3]:.2f}}};\n")
         f.write('};')
     print(f"output bgm_{filename}.pos")
+
+def rewrite_pos_bgm_for_tetra(filename, config, output_dir):
+    input_pos_path  = output_dir / f"bgm_{filename}.pos"
+    output_pos_path = output_dir / f"bgm_{filename}_for_tetra.pos"
+    # SS(...) { ... }; を検出する正規表現
+    pattern = re.compile(
+        r'(SS\s*\([^)]*\)\s*\{)([^}]*)\}(;)'
+    )
+    with open(input_pos_path, 'r') as fin, open(output_pos_path, 'w') as fout:
+        for line in fin:
+            match = pattern.search(line)
+            if match:
+                prefix = match.group(1)   # SS(...) {
+                scalar_str = match.group(2)  # s0,s1,s2,s3
+                suffix = match.group(3)   # ;
+                # スカラーを float に変換
+                scalars = [float(x) for x in scalar_str.split(',')]
+                # 定数倍
+                scaled_scalars = [s * config.TETRA_SCALING for s in scalars]
+                # フォーマットを揃えて書き戻す
+                new_scalar_str = ",".join(f"{s:.2f}" for s in scaled_scalars)
+                new_line = f"{prefix}{new_scalar_str}}}{suffix}\n"
+                fout.write(new_line)
+            else:
+                # View 行や }; 行などはそのまま
+                fout.write(line)
+    print(f"scaled pos file written to: {output_pos_path}")
+    return output_pos_path
 
 def write_csv_centerline(centerline_nodes,radius_list,filepath,output_dir):
     out_dir = Path(output_dir)
@@ -352,61 +372,6 @@ def read_msh_original_WALL(filepath_msh, mesh):
     mesh.num_of_surfacetriangles = len(surface_triangles)
     return surface_nodes, surface_triangles
 
-def read_vtk_for_hausdorff(filepath_vtk):
-    with open(filepath_vtk, 'r') as file:
-        lines = file.readlines()
-    points_section = False
-    cells_section = False
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith("POINTS"):
-            points_section = True
-            node_id=1
-            surface_node_dict = {}
-            surface_nodes = []
-            continue
-        if line.startswith("CELLS"):
-            points_section = False
-            cells_section = True
-            triangle_id=1
-            surface_triangle_dict={}   
-            surface_triangles = []
-            continue
-
-        if points_section:
-            if not line: # 「行が空なら」
-                points_section = False
-                continue
-            coords = list(map(float, line.split()))
-            x=coords[0]
-            y=coords[1]
-            z=coords[2]
-            surface_node=node.NodeForHausdorff(node_id,x,y,z)
-            surface_node_dict[node_id]= surface_node
-            surface_nodes.append(surface_node)
-            node_id+=1
-        if cells_section:
-            if line.startswith("CELL_TYPES") or line.startswith("POINT_DATA") or line.startswith("CELL_DATA"):
-                cells_section = False
-                continue
-            if not line: # 「行が空なら」
-                cells_section = False
-                continue
-            cell_data = list(map(int, line.split()))
-            if cell_data[0] == 3:
-                node0 = surface_node_dict[cell_data[1]+1]
-                node1 = surface_node_dict[cell_data[2]+1]
-                node2 = surface_node_dict[cell_data[3]+1]
-                surface_triangle = cell.Triangle(triangle_id, node0, node1, node2)
-                surface_triangle_dict[triangle_id]=surface_triangle
-                surface_triangles.append(surface_triangle)
-                surface_node_dict[cell_data[1]+1].append(triangle_id)
-                surface_node_dict[cell_data[2]+1].append(triangle_id)
-                surface_node_dict[cell_data[3]+1].append(triangle_id)
-                triangle_id += 1
-    return surface_nodes,surface_node_dict,surface_triangles,surface_triangle_dict
-
 def write_stl_innersurface(mesh,layernode_dict,config,output_dir):
     filename = "innersurface_" + str(config.NUM_OF_LAYERS) + ".stl"
     filepath = str( output_dir / filename)
@@ -479,38 +444,6 @@ LOOKUP_TABLE default\n"""
         for tri in surface_triangles:
             # コード内では、中心線NodeのIDは0スタート
             f.write(f"{tri.correspond_centerlinenode.id}\n")
-
-def write_vtk_hausdorff(surface_nodes, surface_triangles, haus):
-    if not os.path.exists("output"):
-        os.makedirs("output")
-    filepath = os.path.join("output", "hausdorff.vtk")
-
-    # 三角形セル数とPOLYGONS要素数 (4*n_triangles): 3+頂点数
-    n_points = len(surface_nodes)
-    n_tri = len(surface_triangles)
-
-    with open(filepath, "w") as f:
-        # --- ヘッダ ---
-        f.write("# vtk DataFile Version 2.0\n")
-        f.write("Hausdorff distance\n")
-        f.write("ASCII\n")
-        f.write("DATASET POLYDATA\n")
-        # --- 頂点座標 ---
-        f.write(f"POINTS {n_points} float\n")
-        for pt in surface_nodes:
-            f.write(f"{pt.x} {pt.y} {pt.z}\n")
-        # --- 三角形セル ---
-        # POLYGONS n_triangles total_index_count
-        # total_index_count = n_triangles * (1 + 3)
-        f.write(f"POLYGONS {n_tri} {n_tri * 4}\n")
-        for tri in surface_triangles:
-            f.write(f"3 {tri.node0.id - 1} {tri.node1.id - 1} {tri.node2.id - 1}\n")
-        # --- スカラー（ポイントデータ） ---
-        f.write(f"POINT_DATA {n_points}\n")
-        f.write("SCALARS haus float 1\n")
-        f.write("LOOKUP_TABLE default\n")
-        for v in haus:
-            f.write(f"{v}\n")
 
 def read_msh_innermesh(filepath,mesh,config):
     node_innermesh_dict={}
@@ -705,70 +638,6 @@ def write_msh_allmesh(mesh,filename,output_dir):
             elements_countor+=1
             f.write(f"{elements_countor} 6 2 100 1 {prism.id0} {prism.id1} {prism.id2} {prism.id3} {prism.id4} {prism.id5}\n")
         f.write("$EndElements\n")
-
-def convert_stl_to_vtk(filepath_stl):
-    # 入力ファイルの拡張子無しのファイル名
-    filename_without_ext = os.path.splitext(os.path.basename(filepath_stl))[0]
-
-    output_filename = filename_without_ext + ".vtk"
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.makedirs(os.path.join(script_dir, "output"), exist_ok=True)
-    output_filepath = os.path.join(script_dir, "output", output_filename)
-
-    triangles = []
-    with open(filepath_stl, 'r') as f:
-        lines = f.readlines()
-
-    current_triangle = []
-    for line in lines:
-        parts = line.strip().split()
-        if len(parts) >= 4 and parts[0].lower() == 'vertex':
-            x, y, z = map(float, parts[1:4])
-            current_triangle.append((x, y, z))
-            if len(current_triangle) == 3:
-                triangles.append(tuple(current_triangle))
-                current_triangle = []
-
-    points = []
-    point_index = {}
-    cells = []
-
-    for tri in triangles:
-        cell = []
-        for p in tri:
-            if p not in point_index:
-                point_index[p] = len(points)
-                points.append(p)
-            cell.append(point_index[p])
-        cells.append(cell)
-
-    # 出力
-    with open(output_filepath, 'w') as f:
-        f.write('# vtk DataFile Version 2.0\n')
-        f.write('Converted from STL\n')
-        f.write('ASCII\n')
-        f.write('DATASET UNSTRUCTURED_GRID\n')
-        
-        # POINTS
-        f.write(f'POINTS {len(points)} double\n')
-        for x, y, z in points:
-            f.write(f'{x} {y} {z}\n')
-        f.write('\n')
-
-        # CELLS
-        total_size = len(cells)*4
-        f.write(f'CELLS {len(cells)} {total_size}\n')
-        for c in cells:
-            f.write(f'3 {c[0]} {c[1]} {c[2]}\n')
-        f.write('\n')
-        
-        # CELL_TYPES
-        f.write(f'CELL_TYPES {len(cells)}\n')
-        for _ in cells:
-            f.write('5\n')
-    
-    print(f"finished stl_to_vtk convert: {output_filename}")
-    return output_filepath
 
 def copy_files_to_dir(
     *src_files: str | Path,

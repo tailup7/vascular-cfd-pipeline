@@ -1,0 +1,93 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1612+                                |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version         2;
+    format          ascii;
+    class           dictionary;
+    location        "system";
+    object          controlDict;
+}
+
+application     pimpleFoam;
+
+startFrom       latestTime;
+startTime       0;
+
+stopAt          endTime;
+endTime         1.0;
+
+deltaT          1e-05;                 // 初期 Δt（adjustTimeStep 有効時は上書き）
+
+writeControl    adjustableRunTime;     // 例：0.01 s ごとに通常の出力
+writeInterval   0.01;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+writePrecision  6;
+writeCompression off;
+
+timeFormat      general;
+timePrecision   6;
+
+runTimeModifiable true;
+
+//================= 時間刻み制御 =================//
+adjustTimeStep          yes;
+maxCo                   0.35;          // 0.3→0.35 に緩和（Δtの下がり癖を抑制）
+maxGlobalCo             0.5;
+maxDeltaT               1e-3;
+rDeltaTSmoothingCoeff   0.6;           // Δt 変動の平滑化を強める
+rDeltaTDampingCoeff     1.0;
+
+//================= PIMPLE 制御 ==================//
+PIMPLE
+{
+    nOuterCorrectors          3;       // 2→3（外側整合を改善）
+    nCorrectors               2;
+    nNonOrthogonalCorrectors  2;       // 非直交 Max?65 対策に 2
+    residualControl
+    {
+        p   { tolerance 1e-4; relTol 0; }
+        U   { tolerance 1e-4; relTol 0; }
+        "(k|epsilon|omega|R|nuTilda)" { tolerance 1e-4; relTol 0; }
+    }
+}
+
+//================= functionObjects ==============//
+functions
+{
+    // Courant 数（場 Co）を毎ステップで計算・出力
+    CoNum
+    {
+        type            CourantNo;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+
+    wallShearStress
+    {
+        type            wallShearStress;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+
+    writeFields
+    {
+        type            writeObjects;
+        libs            ("libutilityFunctionObjects.so");
+        objects         ( U p );       
+        writeControl    writeTime;
+        writeInterval   1;
+    }
+}
+
+// ************************************************************************* //

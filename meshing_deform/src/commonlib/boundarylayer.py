@@ -10,6 +10,8 @@ def make_nthlayer_surface_node(n, surface_node_dict,surface_triangles, mesh, con
         for onenode in nodes:
             # scaling_factor = n層目までの総合高さ(直径比)  * 断面と等価な面積を持つ真円の直径 
             scalingfactor = utility.calculate_nth_layer_thickratio(n, config)*onenode.scalar_forlayer
+            if config.MAKE_BOUNDARY_CONSTANT:
+                scalingfactor = utility.calculate_nth_layer_thickratio(n, config)*config.RADIUS_MINIMUM
             if onenode.id in temp:
                 nth_layer_surface_node_dict[onenode.id].x += scalingfactor*surface_triangle.unitnormal_in[0]
                 nth_layer_surface_node_dict[onenode.id].y += scalingfactor*surface_triangle.unitnormal_in[1]

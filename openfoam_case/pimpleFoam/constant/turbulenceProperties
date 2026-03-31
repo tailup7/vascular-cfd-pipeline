@@ -1,0 +1,30 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 | OpenFOAM: The Open Source CFD Toolbox           |
+| \\      /  F ield         | Version:  2506                                  |
+|  \\    /   O peration     | http://www.OpenFOAM.org                        |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      turbulenceProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+simulationType  laminar;
+
+laminarProperties
+{
+    // Laminar 모델 생성 용 – 비워 두어도 OK
+}
+
+// ———— RAS(난류) 모델을 쓰려면 아래 두 줄 주석 해제 ————
+//simulationType  RAS;
+//RAS
+//{
+//    RASModel        kEpsilon;    // 또는 kOmegaSST 등
+//    turbulence      on;
+//    printCoeffs     on;
+//}

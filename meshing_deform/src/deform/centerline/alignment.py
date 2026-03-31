@@ -1,5 +1,5 @@
 from __future__ import annotations
-from tkinter import filedialog, simpledialog, messagebox
+
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -193,10 +193,17 @@ def write_centerline_csv(csv_path: Path, nodes, radius_list):
 # GUI runner
 # =========================
 def run_alignment_gui():
+    try:
+        from tkinter import filedialog, simpledialog, messagebox
+    except Exception as e:
+        raise RuntimeError(
+            "tkinter (GUI) is not available in this environment. "
+            "Use non-GUI/batch execution or run on a machine with Tk support."
+        ) from e
     centerline_filepath = Path(myio.select_csv("original"))
     centerline_nodes    = myio.read_original_centerline(centerline_filepath)
     target_centerline_filepath = Path(myio.select_csv("target"))
-    target_centerline_nodes, radius_list_target, inlet_outlet_info   = myio.read_target_centerline(target_centerline_filepath)
+    target_centerline_nodes, radius_list_target, inlet_outlet_info,expansion_list   = myio.read_target_centerline(target_centerline_filepath)
 
     n_org = len(centerline_nodes)
     n_tgt = len(target_centerline_nodes)
@@ -263,3 +270,5 @@ def run_alignment_gui():
 
 if __name__ == "__main__":
     run_alignment_gui()
+
+

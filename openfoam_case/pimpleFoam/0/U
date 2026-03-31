@@ -1,0 +1,168 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    WALL
+    {
+        type    fixedValue;
+        value   uniform (0 0 0);
+    }
+
+    INLET
+    {
+        type  codedFixedValue;
+        value uniform (0 0 0);
+        name  parabolicPulseInlet;
+
+        codeInclude
+        #{
+            #include <fstream>
+            #include <limits>
+            #include <cmath>
+            #include "mathematicalConstants.H"
+            #include "PstreamReduceOps.H" 
+        #};
+
+        code
+        #{
+            using namespace Foam;
+
+            // =========================
+            // 1) 入力テーブル amp(t)
+            // =========================
+            const fileName caseRoot = this->db().time().rootPath()/this->db().time().caseName();
+            const fileName tblFile  = caseRoot/"constant/input.data";
+
+            const scalar t = this->db().time().value();
+            scalar amp = 0.0;
+            {
+                std::ifstream is(tblFile.c_str());
+                if (!is.good())
+                {
+                    FatalErrorInFunction << "Cannot open " << tblFile << exit(FatalError);
+                }
+
+                scalar tPrev = 0.0, aPrev = 0.0;
+                if (!(is >> tPrev >> aPrev))
+                {
+                    FatalErrorInFunction << "Empty or invalid table: " << tblFile << exit(FatalError);
+                }
+
+                if (t <= tPrev)
+                {
+                    amp = aPrev;
+                }
+                else
+                {
+                    bool done = false;
+                    while (is.good())
+                    {
+                        scalar tNow = 0.0, aNow = 0.0;
+                        is >> tNow >> aNow;
+                        if (!is.good()) break;
+
+                        if (t <= tNow)
+                        {
+                            const scalar denom = (tNow - tPrev);
+                            amp = (denom > SMALL)
+                                  ? (aPrev + (aNow - aPrev)*(t - tPrev)/denom)
+                                  : aNow;
+                            done = true;
+                            break;
+                        }
+                        tPrev = tNow; aPrev = aNow;
+                    }
+                    if (!done) amp = aPrev;
+                }
+            }
+
+            // ==========================================
+            // 2) パッチ幾何から C0 と R を自動計算（並列対応）
+            // ==========================================
+            const vectorField c(patch().Cf());   // ローカルのフェイス中心
+            const vectorField Sf(patch().Sf());  // ローカルの面積ベクトル
+            const vectorField n(patch().nf());   // ローカルの単位法線
+
+            // ローカル集計
+            scalar Atot_local = 0.0;
+            vector Csum_local = vector::zero;
+            vector Nsum_local = vector::zero;
+
+            forAll(c, i)
+            {
+                const scalar Ai = mag(Sf[i]);
+                Atot_local += Ai;
+                Csum_local += Ai * c[i];
+                Nsum_local += Sf[i];
+            }
+
+            // 全ランク合計
+            const scalar Atot = returnReduce(Atot_local, sumOp<scalar>());
+            const vector Csum = returnReduce(Csum_local, sumOp<vector>());
+            const vector Nsum = returnReduce(Nsum_local, sumOp<vector>());
+
+            if (Atot <= VSMALL)
+            {
+                FatalErrorInFunction << "Global INLET patch area is zero. Check patch name." << exit(FatalError);
+            }
+
+            const vector C0 = Csum / Atot;  // 全体重心
+
+            // 代表法線（全体面積ベクトルを正規化）
+            vector nHat = vector::zero;
+            {
+                const scalar mN = mag(Nsum);
+                if (mN > VSMALL) nHat = Nsum / mN;     // normalise の代替
+                else             nHat = (n.size() ? n[0] : vector(0,0,1));
+            }
+
+            // 円相当半径
+            const scalar R  = Foam::sqrt(Atot / constant::mathematical::pi);
+            const scalar R2 = sqr(R);
+
+            // =========================
+            // 3) 放物型プロファイルを付与
+            // =========================
+            vectorField& field = *this;
+
+            forAll(field, i)
+            {
+                const vector d  = c[i] - C0;
+                // 断面平面への射影（法線方向を除去）
+                const vector dt = d - ((d & nHat) * nHat);
+                const scalar rsq = magSqr(dt);
+
+                scalar profile = 1.0 - rsq/R2;   // 1 - (r/R)^2
+                if (profile < 0) profile = 0;
+
+                // 流入向き（符号は幾何で決まる。必要なら -1 を外す）
+                field[i] = 2.0 * amp * profile * (-1.0) * n[i];
+            }
+        #};
+    }
+
+    OUTLET
+    {
+        type    zeroGradient;
+    }
+}
+
+// ************************************************************************* //
